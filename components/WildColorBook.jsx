@@ -19,7 +19,6 @@ const ANIMALS = [
   { id: "puppy", name: "Puppy", emoji: "🐶", coloring: "/images/puppy-coloring.png", reference: "/reference/puppy-reference.png" },
 ];
 
-// Fallback SVG generators
 function createFallbackColoringSvgDataUrl(label, emoji) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900" viewBox="0 0 900 900">
     <rect width="100%" height="100%" fill="white"/>
@@ -47,7 +46,8 @@ function createFallbackReferenceSvgDataUrl(label, emoji) {
     <circle cx="450" cy="350" r="180" fill="#ffd54f" stroke="#111" stroke-width="18"/>
     <circle cx="360" cy="220" r="70" fill="#ffcc80" stroke="#111" stroke-width="18"/>
     <circle cx="540" cy="220" r="70" fill="#ffcc80" stroke="#111" stroke-width="18"/>
-    <circle cx="395" cy="330" r="18" fill="#111"/><circle cx="505" cy="330" r="18" fill="#111"/>
+    <circle cx="395" cy="330" r="18" fill="#111"/>
+    <circle cx="505" cy="330" r="18" fill="#111"/>
     <ellipse cx="450" cy="395" rx="28" ry="18" fill="#111"/>
     <path d="M415 430 Q450 465 485 430" fill="none" stroke="#111" stroke-width="10" stroke-linecap="round"/>
     <ellipse cx="320" cy="650" rx="85" ry="110" fill="#ffb74d" stroke="#111" stroke-width="18"/>
@@ -58,7 +58,6 @@ function createFallbackReferenceSvgDataUrl(label, emoji) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-// Image loader with error handling
 function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -69,7 +68,6 @@ function loadImage(src) {
   });
 }
 
-// Animal selection card component
 function AnimalCard({ animal, active, onClick }) {
   return (
     <button
@@ -93,8 +91,12 @@ function AnimalCard({ animal, active, onClick }) {
         transition: "all 0.2s ease",
         flexShrink: 0
       }}
-      onMouseEnter={(e) => { if (!active) e.currentTarget.style.transform = "translateY(-3px)"; }}
-      onMouseLeave={(e) => { if (!active) e.currentTarget.style.transform = "translateY(0)"; }}
+      onMouseEnter={(e) => {
+        if (!active) e.currentTarget.style.transform = "translateY(-3px)";
+      }}
+      onMouseLeave={(e) => {
+        if (!active) e.currentTarget.style.transform = "translateY(0)";
+      }}
     >
       <div style={{ fontSize: 34, lineHeight: 1 }}>{animal.emoji}</div>
       <div
@@ -115,7 +117,6 @@ function AnimalCard({ animal, active, onClick }) {
   );
 }
 
-// Reference panel component
 function ReferencePanel({ animal, src, hasFallback }) {
   return (
     <div style={styles.sideCard}>
@@ -144,12 +145,10 @@ function ReferencePanel({ animal, src, hasFallback }) {
 }
 
 export default function WildColorBook() {
-  // Canvas refs
   const displayCanvasRef = useRef(null);
   const fillCanvasRef = useRef(null);
   const baseCanvasRef = useRef(null);
 
-  // State
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [tool, setTool] = useState("bucket");
@@ -161,9 +160,7 @@ export default function WildColorBook() {
   const [coloringFallback, setColoringFallback] = useState(false);
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
-  const [isDrawing, setIsDrawing] = useState(false);
 
-  // Refs for performance
   const isDrawingRef = useRef(false);
   const lastDrawTimeRef = useRef(0);
 
@@ -171,48 +168,15 @@ export default function WildColorBook() {
   const OUTLINE_THRESHOLD = 120;
   const MAX_UNDO_STEPS = 10;
 
-  // Memoized fallback sources
   const coloringFallbackSrc = useMemo(
     () => createFallbackColoringSvgDataUrl(animal.name, animal.emoji),
     [animal.name, animal.emoji]
   );
+
   const referenceFallbackSrc = useMemo(
     () => createFallbackReferenceSvgDataUrl(animal.name, animal.emoji),
     [animal.name, animal.emoji]
   );
-
-  // Load all images when animal changes
-  useEffect(() => {
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIndex]);
-
-  // Handle window resize
-  useEffect(() => {
-    const handleResize = () => {
-      if (isReady) loadColoringCanvas();
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [isReady, loadColoringCanvas]);
-
-  // Load reference and coloring images
-  const loadAll = useCallback(async () => {
-    setUndoStack([]);
-    setRedoStack([]);
-    await Promise.all([loadColoringCanvas(), loadReferenceImage()]);
-  }, [loadColoringCanvas, loadReferenceImage]);
-
-  const loadReferenceImage = useCallback(async () => {
-    try {
-      await loadImage(animal.reference);
-      setReferenceSrc(animal.reference);
-      setReferenceFallback(false);
-    } catch {
-      setReferenceSrc(referenceFallbackSrc);
-      setReferenceFallback(true);
-    }
-  }, [animal.reference, referenceFallbackSrc]);
 
   const redrawAll = useCallback(() => {
     const displayCanvas = displayCanvasRef.current;
@@ -227,6 +191,17 @@ export default function WildColorBook() {
     displayCtx.drawImage(fillCanvas, 0, 0);
     displayCtx.drawImage(baseCanvas, 0, 0);
   }, []);
+
+  const loadReferenceImage = useCallback(async () => {
+    try {
+      await loadImage(animal.reference);
+      setReferenceSrc(animal.reference);
+      setReferenceFallback(false);
+    } catch {
+      setReferenceSrc(referenceFallbackSrc);
+      setReferenceFallback(true);
+    }
+  }, [animal.reference, referenceFallbackSrc]);
 
   const loadColoringCanvas = useCallback(async () => {
     const displayCanvas = displayCanvasRef.current;
@@ -245,7 +220,6 @@ export default function WildColorBook() {
       setColoringFallback(true);
     }
 
-    // Calculate responsive size
     const screenWidth = typeof window !== "undefined" ? window.innerWidth : 1440;
     const isMobile = screenWidth < 1100;
     const maxW = isMobile ? Math.min(screenWidth - 60, 760) : 760;
@@ -255,29 +229,55 @@ export default function WildColorBook() {
     const height = Math.max(320, Math.round(img.height * ratio));
 
     setCanvasSize({ width, height });
+
     [displayCanvas, fillCanvas, baseCanvas].forEach((canvas) => {
       canvas.width = width;
       canvas.height = height;
     });
 
-    // Draw base outline
     const baseCtx = baseCanvas.getContext("2d", { willReadFrequently: true });
     const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
+
     if (baseCtx && fillCtx) {
       baseCtx.clearRect(0, 0, width, height);
       fillCtx.clearRect(0, 0, width, height);
       baseCtx.drawImage(img, 0, 0, width, height);
       redrawAll();
     }
+
     setIsReady(true);
   }, [animal.coloring, coloringFallbackSrc, redrawAll]);
 
-  // Color utilities
+  // SAFE: declared AFTER dependencies
+  const loadAll = useCallback(async () => {
+    setUndoStack([]);
+    setRedoStack([]);
+    await Promise.all([loadColoringCanvas(), loadReferenceImage()]);
+  }, [loadColoringCanvas, loadReferenceImage]);
+
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (isReady) loadColoringCanvas();
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [isReady, loadColoringCanvas]);
+
   const hexToRgba = useCallback((hex) => {
     let c = hex.replace("#", "");
     if (c.length === 3) c = c.split("").map((x) => x + x).join("");
     const num = parseInt(c, 16);
-    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255, a: 255 };
+    return {
+      r: (num >> 16) & 255,
+      g: (num >> 8) & 255,
+      b: num & 255,
+      a: 255
+    };
   }, []);
 
   const isOutlinePixel = useCallback((r, g, b, a) => {
@@ -285,7 +285,6 @@ export default function WildColorBook() {
     return (r + g + b) / 3 < OUTLINE_THRESHOLD;
   }, []);
 
-  // Get canvas coordinates from event
   const getCanvasPoint = useCallback((e) => {
     const canvas = displayCanvasRef.current;
     if (!canvas) return null;
@@ -307,26 +306,27 @@ export default function WildColorBook() {
 
     return {
       x: Math.floor(((clientX - rect.left) / rect.width) * canvas.width),
-      y: Math.floor(((clientY - rect.top) / rect.height) * canvas.height),
+      y: Math.floor(((clientY - rect.top) / rect.height) * canvas.height)
     };
   }, []);
 
-  // Undo/Redo system with memory limit
   const pushUndoSnapshot = useCallback(() => {
     const fillCanvas = fillCanvasRef.current;
     if (!fillCanvas) return;
+
     const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
     if (!fillCtx) return;
 
     const snapshot = fillCtx.getImageData(0, 0, fillCanvas.width, fillCanvas.height);
+
     setUndoStack((prev) => {
       const newStack = [...prev, snapshot];
       return newStack.slice(-MAX_UNDO_STEPS);
     });
+
     setRedoStack([]);
   }, []);
 
-  // Flood fill algorithm - stays inside black outlines
   const floodFill = useCallback((startX, startY) => {
     const baseCanvas = baseCanvasRef.current;
     const fillCanvas = fillCanvasRef.current;
@@ -346,14 +346,12 @@ export default function WildColorBook() {
     const fillData = fillImage.data;
     const startIndex = (startY * width + startX) * 4;
 
-    // Don't fill on black outlines
     if (isOutlinePixel(baseData[startIndex], baseData[startIndex + 1], baseData[startIndex + 2], baseData[startIndex + 3])) {
       return;
     }
 
     const newColor = hexToRgba(selectedColor);
 
-    // Skip if already this color
     if (
       fillData[startIndex + 3] > 0 &&
       fillData[startIndex] === newColor.r &&
@@ -370,7 +368,6 @@ export default function WildColorBook() {
 
     while (stack.length > 0) {
       const [cx, cy] = stack.pop();
-      if (!cx && cx !== 0) continue;
 
       if (cx < 0 || cy < 0 || cx >= width || cy >= height) continue;
 
@@ -380,16 +377,13 @@ export default function WildColorBook() {
 
       const i = pos * 4;
 
-      // Stop at black outlines
       if (isOutlinePixel(baseData[i], baseData[i + 1], baseData[i + 2], baseData[i + 3])) continue;
 
-      // Fill the pixel
       fillData[i] = newColor.r;
       fillData[i + 1] = newColor.g;
       fillData[i + 2] = newColor.b;
       fillData[i + 3] = 255;
 
-      // Add neighbors to stack
       stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
     }
 
@@ -397,7 +391,6 @@ export default function WildColorBook() {
     redrawAll();
   }, [hexToRgba, isOutlinePixel, pushUndoSnapshot, redrawAll, selectedColor]);
 
-  // Brush drawing with outline detection
   const drawBrushDot = useCallback((x, y) => {
     const fillCanvas = fillCanvasRef.current;
     const baseCanvas = baseCanvasRef.current;
@@ -409,6 +402,7 @@ export default function WildColorBook() {
 
     const radius = Math.max(2, Math.floor(brushSize / 2));
     const color = hexToRgba(selectedColor);
+
     const minX = Math.max(0, x - radius);
     const maxX = Math.min(fillCanvas.width - 1, x + radius);
     const minY = Math.max(0, y - radius);
@@ -416,6 +410,7 @@ export default function WildColorBook() {
 
     const fillImage = fillCtx.getImageData(minX, minY, maxX - minX + 1, maxY - minY + 1);
     const baseImage = baseCtx.getImageData(minX, minY, maxX - minX + 1, maxY - minY + 1);
+
     const fillData = fillImage.data;
     const baseData = baseImage.data;
     const localWidth = maxX - minX + 1;
@@ -438,14 +433,15 @@ export default function WildColorBook() {
         fillData[i + 3] = 255;
       }
     }
+
     fillCtx.putImageData(fillImage, minX, minY);
     redrawAll();
   }, [brushSize, hexToRgba, isOutlinePixel, redrawAll, selectedColor]);
 
-  // Eraser tool
   const eraseDot = useCallback((x, y) => {
     const fillCanvas = fillCanvasRef.current;
     if (!fillCanvas) return;
+
     const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
     if (!fillCtx) return;
 
@@ -468,20 +464,22 @@ export default function WildColorBook() {
         const localX = px - minX;
         const localY = py - minY;
         const i = (localY * localWidth + localX) * 4;
+
         fillData[i] = 0;
         fillData[i + 1] = 0;
         fillData[i + 2] = 0;
         fillData[i + 3] = 0;
       }
     }
+
     fillCtx.putImageData(fillImage, minX, minY);
     redrawAll();
   }, [brushSize, redrawAll]);
 
-  // Event handlers with throttling
   const handleStart = useCallback((e) => {
     e.preventDefault();
     if (!isReady) return;
+
     const point = getCanvasPoint(e);
     if (!point) return;
 
@@ -491,7 +489,6 @@ export default function WildColorBook() {
     }
 
     pushUndoSnapshot();
-    setIsDrawing(true);
     isDrawingRef.current = true;
     lastDrawTimeRef.current = Date.now();
 
@@ -503,7 +500,6 @@ export default function WildColorBook() {
     e.preventDefault();
     if (!isReady || !isDrawingRef.current || tool === "bucket") return;
 
-    // Throttle to ~60fps for performance
     const now = Date.now();
     if (now - lastDrawTimeRef.current < 16) return;
     lastDrawTimeRef.current = now;
@@ -517,14 +513,13 @@ export default function WildColorBook() {
 
   const handleEnd = useCallback((e) => {
     if (e) e.preventDefault();
-    setIsDrawing(false);
     isDrawingRef.current = false;
   }, []);
 
-  // Undo/Redo handlers
   const handleUndo = useCallback(() => {
     const fillCanvas = fillCanvasRef.current;
     if (!fillCanvas || undoStack.length === 0) return;
+
     const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
     if (!fillCtx) return;
 
@@ -533,6 +528,7 @@ export default function WildColorBook() {
 
     setUndoStack((prev) => prev.slice(0, -1));
     setRedoStack((prev) => [...prev, current]);
+
     fillCtx.putImageData(previous, 0, 0);
     redrawAll();
   }, [redoStack, redrawAll, undoStack]);
@@ -540,6 +536,7 @@ export default function WildColorBook() {
   const handleRedo = useCallback(() => {
     const fillCanvas = fillCanvasRef.current;
     if (!fillCanvas || redoStack.length === 0) return;
+
     const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
     if (!fillCtx) return;
 
@@ -548,17 +545,22 @@ export default function WildColorBook() {
 
     setRedoStack((prev) => prev.slice(0, -1));
     setUndoStack((prev) => [...prev, current]);
+
     fillCtx.putImageData(next, 0, 0);
     redrawAll();
   }, [redoStack, redrawAll, undoStack]);
 
   const handleReset = useCallback(() => {
-    if (!confirm("Clear all coloring and start over?")) return;
+    if (!window.confirm("Clear all coloring and start over?")) return;
+
     pushUndoSnapshot();
+
     const fillCanvas = fillCanvasRef.current;
     if (!fillCanvas) return;
+
     const fillCtx = fillCanvas.getContext("2d");
     if (!fillCtx) return;
+
     fillCtx.clearRect(0, 0, fillCanvas.width, fillCanvas.height);
     redrawAll();
   }, [pushUndoSnapshot, redrawAll]);
@@ -566,6 +568,7 @@ export default function WildColorBook() {
   const handleSave = useCallback(() => {
     const displayCanvas = displayCanvasRef.current;
     if (!displayCanvas) return;
+
     const link = document.createElement("a");
     link.download = `${animal.id}-colored.png`;
     link.href = displayCanvas.toDataURL("image/png");
@@ -574,7 +577,6 @@ export default function WildColorBook() {
 
   return (
     <div style={styles.appShell}>
-      {/* Header */}
       <header style={styles.topBar}>
         <div style={styles.topRow}>
           <div style={styles.brandBox}>
@@ -590,8 +592,7 @@ export default function WildColorBook() {
                   onClick={() => setTool(t)}
                   style={{
                     ...styles.toolBtn,
-                    ...(tool === t ? styles.toolBtnActive : {}),
-                    transition: "all 0.2s ease"
+                    ...(tool === t ? styles.toolBtnActive : {})
                   }}
                 >
                   {t === "bucket" ? "🪣 Bucket" : t === "brush" ? "🖌️ Brush" : "🧽 Eraser"}
@@ -615,11 +616,8 @@ export default function WildColorBook() {
                           : color === "#ffffff"
                             ? "1px solid #d1d5db"
                             : "1px solid rgba(255,255,255,0.6)",
-                      boxShadow: selectedColor === color ? "0 0 0 2px rgba(79,70,229,0.15)" : "none",
-                      transition: "transform 0.15s ease"
+                      boxShadow: selectedColor === color ? "0 0 0 2px rgba(79,70,229,0.15)" : "none"
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.2)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
                   />
                 ))}
               </div>
@@ -647,7 +645,6 @@ export default function WildColorBook() {
         </div>
       </header>
 
-      {/* NEW TOP ANIMAL ROW */}
       <section style={styles.animalsTopSection}>
         <div style={styles.animalsTopHeader}>🐾 Choose Animal</div>
         <div style={styles.animalsTopScroll}>
@@ -664,9 +661,7 @@ export default function WildColorBook() {
         </div>
       </section>
 
-      {/* Main Content */}
       <div style={styles.mainGrid}>
-        {/* Coloring Canvas */}
         <main style={styles.centerPanel}>
           <div style={styles.canvasOuterCard}>
             <div style={styles.canvasInnerBox}>
@@ -699,6 +694,7 @@ export default function WildColorBook() {
                 draggable={false}
               />
             </div>
+
             <div style={styles.centerHelper}>
               {coloringFallback
                 ? `🎨 Fallback image for ${animal.name}. Add /public/images/${animal.id}-coloring.png for custom art.`
@@ -711,7 +707,6 @@ export default function WildColorBook() {
           </div>
         </main>
 
-        {/* Reference Panel */}
         <aside style={styles.rightPanel}>
           <ReferencePanel animal={animal} src={referenceSrc} hasFallback={referenceFallback} />
         </aside>
@@ -720,7 +715,6 @@ export default function WildColorBook() {
   );
 }
 
-// Styles object
 const styles = {
   appShell: {
     minHeight: "100vh",
@@ -821,8 +815,7 @@ const styles = {
     cursor: "pointer",
     padding: 0,
     outline: "none",
-    flexShrink: 0,
-    transition: "transform 0.15s ease"
+    flexShrink: 0
   },
   actionGroup: {
     display: "flex",
@@ -843,8 +836,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 14,
-    transition: "all 0.2s ease"
+    fontSize: 14
   },
   primaryBtn: {
     height: 36,
@@ -860,8 +852,7 @@ const styles = {
     fontSize: 14,
     display: "flex",
     alignItems: "center",
-    gap: 6,
-    transition: "all 0.2s ease"
+    gap: 6
   },
   brushBar: {
     display: "flex",
@@ -881,8 +872,6 @@ const styles = {
     width: 140,
     accentColor: "#667eea"
   },
-
-  // NEW TOP ANIMAL ROW
   animalsTopSection: {
     padding: "16px 20px 8px"
   },
@@ -906,8 +895,6 @@ const styles = {
     flexWrap: "nowrap",
     minWidth: "max-content"
   },
-
-  // MAIN GRID NOW ONLY 2 COLUMNS
   mainGrid: {
     display: "grid",
     gridTemplateColumns: "minmax(420px, 1fr) 320px",
