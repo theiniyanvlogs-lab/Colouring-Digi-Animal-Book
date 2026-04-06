@@ -74,6 +74,7 @@ function loadImage(src) {
 function AnimalCard({ animal, active, onClick }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       style={{
         width: 132,
@@ -90,7 +91,9 @@ function AnimalCard({ animal, active, onClick }) {
         gap: 8,
         minHeight: 96,
         boxShadow: active ? "0 8px 18px rgba(91,75,255,0.16)" : "none",
-        flexShrink: 0
+        flexShrink: 0,
+        position: "relative",
+        zIndex: 2
       }}
     >
       <div style={{ fontSize: 30, lineHeight: 1 }}>{animal.emoji}</div>
@@ -125,7 +128,8 @@ function ReferencePanel({ animal, src, hasFallback }) {
             height: "100%",
             objectFit: "contain",
             borderRadius: 16,
-            background: "#f3f4f6"
+            background: "#f3f4f6",
+            pointerEvents: "none"
           }}
           draggable={false}
         />
@@ -147,20 +151,17 @@ export default function WildColorBook() {
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
-  const [tool, setTool] = useState("bucket");
+  const [tool, setTool] = useState("brush"); // default brush so user can paint immediately
   const [brushSize, setBrushSize] = useState(16);
   const [canvasSize, setCanvasSize] = useState({ width: 680, height: 680 });
   const [isReady, setIsReady] = useState(false);
   const [referenceSrc, setReferenceSrc] = useState("");
   const [referenceFallback, setReferenceFallback] = useState(false);
   const [coloringFallback, setColoringFallback] = useState(false);
-
-  // UI-only counters for enabling buttons reliably
   const [undoCount, setUndoCount] = useState(0);
   const [redoCount, setRedoCount] = useState(0);
 
   const isDrawingRef = useRef(false);
-  const lastDrawTimeRef = useRef(0);
 
   const animal = ANIMALS[selectedIndex];
   const OUTLINE_THRESHOLD = 160;
@@ -522,11 +523,10 @@ export default function WildColorBook() {
 
     pushUndoSnapshot();
     isDrawingRef.current = true;
-    lastDrawTimeRef.current = Date.now();
 
     if (tool === "brush") {
       drawBrushDot(point.x, point.y);
-    } else {
+    } else if (tool === "eraser") {
       eraseDot(point.x, point.y);
     }
   }, [drawBrushDot, eraseDot, floodFill, getCanvasPoint, isReady, pushUndoSnapshot, tool]);
@@ -536,16 +536,12 @@ export default function WildColorBook() {
 
     if (!isReady || !isDrawingRef.current || tool === "bucket") return;
 
-    const now = Date.now();
-    if (now - lastDrawTimeRef.current < 16) return;
-    lastDrawTimeRef.current = now;
-
     const point = getCanvasPoint(e);
     if (!point) return;
 
     if (tool === "brush") {
       drawBrushDot(point.x, point.y);
-    } else {
+    } else if (tool === "eraser") {
       eraseDot(point.x, point.y);
     }
   }, [drawBrushDot, eraseDot, getCanvasPoint, isReady, tool]);
@@ -592,8 +588,6 @@ export default function WildColorBook() {
   }, [captureSnapshot, redrawAll, syncHistoryCounts]);
 
   const handleReset = useCallback(() => {
-    if (!window.confirm("Clear all coloring and start over?")) return;
-
     const fillCanvas = fillCanvasRef.current;
     if (!fillCanvas) return;
 
@@ -626,18 +620,29 @@ export default function WildColorBook() {
 
           <div style={styles.headerCenter}>
             <div style={styles.toolGroup}>
-              {["bucket", "brush", "eraser"].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTool(t)}
-                  style={{
-                    ...styles.toolBtn,
-                    ...(tool === t ? styles.toolBtnActive : {})
-                  }}
-                >
-                  {t === "bucket" ? "🪣 Bucket" : t === "brush" ? "🖌️ Brush" : "🧽 Eraser"}
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={() => setTool("bucket")}
+                style={{ ...styles.toolBtn, ...(tool === "bucket" ? styles.toolBtnActive : {}) }}
+              >
+                🪣 Bucket
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTool("brush")}
+                style={{ ...styles.toolBtn, ...(tool === "brush" ? styles.toolBtnActive : {}) }}
+              >
+                🖌️ Brush
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTool("eraser")}
+                style={{ ...styles.toolBtn, ...(tool === "eraser" ? styles.toolBtnActive : {}) }}
+              >
+                🧽 Eraser
+              </button>
             </div>
 
             <div style={styles.paletteScroll}>
@@ -645,6 +650,7 @@ export default function WildColorBook() {
                 {COLORS.map((color) => (
                   <button
                     key={color}
+                    type="button"
                     onClick={() => setSelectedColor(color)}
                     title={color}
                     style={{
@@ -655,8 +661,7 @@ export default function WildColorBook() {
                           ? "3px solid #4f46e5"
                           : color === "#ffffff"
                             ? "1px solid #d1d5db"
-                            : "1px solid rgba(255,255,255,0.6)",
-                      boxShadow: selectedColor === color ? "0 0 0 2px rgba(79,70,229,0.15)" : "none"
+                            : "1px solid rgba(255,255,255,0.6)"
                     }}
                   />
                 ))}
@@ -666,6 +671,7 @@ export default function WildColorBook() {
 
           <div style={styles.actionGroup}>
             <button
+              type="button"
               style={{
                 ...styles.secondaryBtn,
                 opacity: undoCount === 0 ? 0.45 : 1,
@@ -679,6 +685,7 @@ export default function WildColorBook() {
             </button>
 
             <button
+              type="button"
               style={{
                 ...styles.secondaryBtn,
                 opacity: redoCount === 0 ? 0.45 : 1,
@@ -691,15 +698,11 @@ export default function WildColorBook() {
               ↪
             </button>
 
-            <button
-              style={styles.secondaryBtn}
-              onClick={handleReset}
-              title="Reset"
-            >
+            <button type="button" style={styles.secondaryBtn} onClick={handleReset} title="Reset">
               🔄
             </button>
 
-            <button style={styles.primaryBtn} onClick={handleSave}>
+            <button type="button" style={styles.primaryBtn} onClick={handleSave}>
               💾 Save
             </button>
           </div>
@@ -740,6 +743,7 @@ export default function WildColorBook() {
             <div style={styles.canvasInnerBox}>
               <canvas ref={baseCanvasRef} style={{ display: "none" }} />
               <canvas ref={fillCanvasRef} style={{ display: "none" }} />
+
               <canvas
                 ref={displayCanvasRef}
                 width={canvasSize.width}
@@ -763,20 +767,22 @@ export default function WildColorBook() {
                   cursor: tool === "bucket" ? "pointer" : "crosshair",
                   touchAction: "none",
                   userSelect: "none",
-                  WebkitUserSelect: "none"
+                  WebkitUserSelect: "none",
+                  position: "relative",
+                  zIndex: 1
                 }}
                 draggable={false}
               />
             </div>
 
             <div style={styles.centerHelper}>
-              {coloringFallback
-                ? `Fallback image for ${animal.name}.`
+              {!isReady
+                ? "Loading..."
                 : tool === "bucket"
-                  ? `Bucket: click inside shape to fill ${animal.name}`
+                  ? `Bucket mode: click inside shape`
                   : tool === "brush"
-                    ? `Brush: draw inside the outline`
-                    : `Eraser: remove colors only`}
+                    ? `Brush mode: drag to paint`
+                    : `Eraser mode: drag to erase`}
             </div>
           </div>
         </main>
@@ -801,15 +807,18 @@ const styles = {
     borderBottom: "1px solid #e5e7eb",
     position: "sticky",
     top: 0,
-    zIndex: 100,
+    zIndex: 9999, // IMPORTANT: top bar always above all
     padding: "10px 14px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+    pointerEvents: "auto"
   },
   topRow: {
     display: "grid",
     gridTemplateColumns: "160px minmax(0, 1fr) auto",
     alignItems: "center",
-    gap: 12
+    gap: 12,
+    position: "relative",
+    zIndex: 9999
   },
   brandBox: {
     display: "flex",
@@ -839,24 +848,31 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    overflow: "hidden"
+    overflow: "hidden",
+    position: "relative",
+    zIndex: 9999
   },
   toolGroup: {
     display: "flex",
-    gap: 6,
-    flexShrink: 0
+    gap: 8,
+    flexShrink: 0,
+    position: "relative",
+    zIndex: 9999
   },
   toolBtn: {
-    height: 44,
-    padding: "0 18px",
-    borderRadius: 12,
+    height: 52,
+    padding: "0 22px",
+    borderRadius: 16,
     border: "1px solid #d1d5db",
     background: "#f9fafb",
     color: "#374151",
-    fontWeight: 700,
+    fontWeight: 800,
     cursor: "pointer",
-    fontSize: 14,
-    whiteSpace: "nowrap"
+    fontSize: 16,
+    whiteSpace: "nowrap",
+    pointerEvents: "auto",
+    position: "relative",
+    zIndex: 9999
   },
   toolBtnActive: {
     background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -870,7 +886,9 @@ const styles = {
     overflowY: "hidden",
     flex: 1,
     paddingBottom: 4,
-    scrollbarWidth: "thin"
+    scrollbarWidth: "thin",
+    position: "relative",
+    zIndex: 9999
   },
   paletteWrap: {
     display: "flex",
@@ -889,14 +907,18 @@ const styles = {
     cursor: "pointer",
     padding: 0,
     outline: "none",
-    flexShrink: 0
+    flexShrink: 0,
+    position: "relative",
+    zIndex: 9999
   },
   actionGroup: {
     display: "flex",
     justifyContent: "flex-end",
     gap: 8,
     flexWrap: "nowrap",
-    flexShrink: 0
+    flexShrink: 0,
+    position: "relative",
+    zIndex: 9999
   },
   secondaryBtn: {
     height: 44,
@@ -910,7 +932,9 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 18
+    fontSize: 18,
+    position: "relative",
+    zIndex: 9999
   },
   primaryBtn: {
     height: 44,
@@ -926,7 +950,9 @@ const styles = {
     fontSize: 14,
     display: "flex",
     alignItems: "center",
-    gap: 6
+    gap: 6,
+    position: "relative",
+    zIndex: 9999
   },
   brushBar: {
     display: "flex",
@@ -935,7 +961,9 @@ const styles = {
     marginTop: 8,
     paddingTop: 8,
     borderTop: "1px solid #f3f4f6",
-    flexWrap: "wrap"
+    flexWrap: "wrap",
+    position: "relative",
+    zIndex: 9999
   },
   brushLabel: {
     fontSize: 13,
@@ -947,7 +975,9 @@ const styles = {
     accentColor: "#667eea"
   },
   animalsTopSection: {
-    padding: "14px 16px 8px"
+    padding: "14px 16px 8px",
+    position: "relative",
+    zIndex: 1
   },
   animalsTopHeader: {
     fontSize: 13,
@@ -974,7 +1004,9 @@ const styles = {
     gridTemplateColumns: "minmax(0, 1fr) 300px",
     gap: 18,
     padding: "8px 16px 20px",
-    alignItems: "start"
+    alignItems: "start",
+    position: "relative",
+    zIndex: 1
   },
   centerPanel: {
     minWidth: 0
@@ -995,7 +1027,9 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     padding: 12,
-    overflow: "hidden"
+    overflow: "hidden",
+    position: "relative",
+    zIndex: 1
   },
   centerHelper: {
     marginTop: 12,
