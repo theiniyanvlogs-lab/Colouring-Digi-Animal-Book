@@ -583,95 +583,99 @@ export default function WildColorBook() {
   return (
     <div style={styles.appShell}>
       <header style={styles.topBar}>
-        <div style={styles.brandBox}>
-          <div style={styles.logo}>🎨</div>
-          <div style={styles.brandText}>WildColor</div>
-        </div>
-
-        <div style={styles.middleHeader}>
-          <div style={styles.toolGroup}>
-            <button
-              onClick={() => setTool("bucket")}
-              style={{
-                ...styles.toolBtn,
-                ...(tool === "bucket" ? styles.toolBtnActive : {})
-              }}
-            >
-              Bucket 🪣
-            </button>
-            <button
-              onClick={() => setTool("brush")}
-              style={{
-                ...styles.toolBtn,
-                ...(tool === "brush" ? styles.toolBtnActive : {})
-              }}
-            >
-              Brush 🖌️
-            </button>
-            <button
-              onClick={() => setTool("eraser")}
-              style={{
-                ...styles.toolBtn,
-                ...(tool === "eraser" ? styles.toolBtnActive : {})
-              }}
-            >
-              Eraser 🧽
-            </button>
+        <div style={styles.topRow}>
+          <div style={styles.brandBox}>
+            <div style={styles.logo}>🎨</div>
+            <div style={styles.brandText}>WildColor</div>
           </div>
 
-          <div style={styles.paletteWrap}>
-            {COLORS.map((color) => (
-              <button
-                key={color}
-                onClick={() => setSelectedColor(color)}
-                title={color}
-                style={{
-                  ...styles.colorDot,
-                  background: color,
-                  border:
-                    selectedColor === color
-                      ? "3px solid #4f46e5"
-                      : color === "#ffffff"
-                      ? "1px solid #d1d5db"
-                      : "1px solid rgba(255,255,255,0.5)",
-                  boxShadow:
-                    selectedColor === color
-                      ? "0 0 0 2px rgba(79,70,229,0.15)"
-                      : "none",
-                }}
-              />
-            ))}
+          <div style={styles.headerScrollArea}>
+            <div style={styles.headerInlineBar}>
+              <div style={styles.toolGroup}>
+                <button
+                  onClick={() => setTool("bucket")}
+                  style={{
+                    ...styles.toolBtn,
+                    ...(tool === "bucket" ? styles.toolBtnActive : {})
+                  }}
+                >
+                  Bucket 🪣
+                </button>
+                <button
+                  onClick={() => setTool("brush")}
+                  style={{
+                    ...styles.toolBtn,
+                    ...(tool === "brush" ? styles.toolBtnActive : {})
+                  }}
+                >
+                  Brush 🖌️
+                </button>
+                <button
+                  onClick={() => setTool("eraser")}
+                  style={{
+                    ...styles.toolBtn,
+                    ...(tool === "eraser" ? styles.toolBtnActive : {})
+                  }}
+                >
+                  Eraser 🧽
+                </button>
+              </div>
+
+              <div style={styles.paletteWrap}>
+                {COLORS.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setSelectedColor(color)}
+                    title={color}
+                    style={{
+                      ...styles.colorDot,
+                      background: color,
+                      border:
+                        selectedColor === color
+                          ? "3px solid #4f46e5"
+                          : color === "#ffffff"
+                          ? "1px solid #d1d5db"
+                          : "1px solid rgba(255,255,255,0.5)",
+                      boxShadow:
+                        selectedColor === color
+                          ? "0 0 0 2px rgba(79,70,229,0.15)"
+                          : "none",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={styles.actionGroup}>
+            <button style={styles.secondaryBtn} onClick={handleUndo} disabled={undoStack.length === 0}>
+              ↩ Undo
+            </button>
+            <button style={styles.secondaryBtn} onClick={handleRedo} disabled={redoStack.length === 0}>
+              ↪ Redo
+            </button>
+            <button style={styles.secondaryBtn} onClick={handleReset}>
+              Reset
+            </button>
+            <button style={styles.primaryBtn} onClick={handleSave}>
+              ⬇ Save
+            </button>
           </div>
         </div>
 
-        <div style={styles.actionGroup}>
-          <button style={styles.secondaryBtn} onClick={handleUndo} disabled={undoStack.length === 0}>
-            ↩ Undo
-          </button>
-          <button style={styles.secondaryBtn} onClick={handleRedo} disabled={redoStack.length === 0}>
-            ↪ Redo
-          </button>
-          <button style={styles.secondaryBtn} onClick={handleReset}>
-            Reset
-          </button>
-          <button style={styles.primaryBtn} onClick={handleSave}>
-            ⬇ Save
-          </button>
+        <div style={styles.brushBar}>
+          <div style={styles.brushLabel}>Brush Size</div>
+          <input
+            type="range"
+            min="6"
+            max="40"
+            value={brushSize}
+            onChange={(e) => setBrushSize(Number(e.target.value))}
+            style={styles.rangeInput}
+          />
+          <div style={styles.brushValue}>{brushSize}px</div>
         </div>
       </header>
-
-      <div style={styles.brushBar}>
-        <div style={styles.brushLabel}>Brush Size</div>
-        <input
-          type="range"
-          min="6"
-          max="40"
-          value={brushSize}
-          onChange={(e) => setBrushSize(Number(e.target.value))}
-          style={styles.rangeInput}
-        />
-        <div style={styles.brushValue}>{brushSize}px</div>
-      </div>
 
       <div style={styles.mainGrid}>
         <aside style={styles.leftPanel}>
@@ -746,23 +750,26 @@ const styles = {
   },
 
   topBar: {
-    minHeight: 86,
-    display: "grid",
-    gridTemplateColumns: "220px 1fr 320px",
-    alignItems: "center",
-    gap: 14,
-    padding: "10px 18px",
     background: "#ffffff",
     borderBottom: "1px solid #dddddf",
     position: "sticky",
     top: 0,
-    zIndex: 20
+    zIndex: 20,
+    padding: "10px 14px 8px"
+  },
+
+  topRow: {
+    display: "grid",
+    gridTemplateColumns: "180px minmax(0, 1fr) auto",
+    alignItems: "center",
+    gap: 12
   },
 
   brandBox: {
     display: "flex",
     alignItems: "center",
-    gap: 12
+    gap: 12,
+    minWidth: 0
   },
 
   logo: {
@@ -779,20 +786,28 @@ const styles = {
   brandText: {
     fontSize: 18,
     fontWeight: 800,
-    color: "#1f2937"
+    color: "#1f2937",
+    whiteSpace: "nowrap"
   },
 
-  middleHeader: {
+  headerScrollArea: {
+    minWidth: 0,
+    overflowX: "auto",
+    overflowY: "hidden",
+    paddingBottom: 4
+  },
+
+  headerInlineBar: {
     display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    minWidth: 0
+    alignItems: "center",
+    gap: 14,
+    minWidth: "max-content"
   },
 
   toolGroup: {
     display: "flex",
     gap: 8,
-    flexWrap: "wrap"
+    flexShrink: 0
   },
 
   toolBtn: {
@@ -803,7 +818,8 @@ const styles = {
     background: "#f7f7fb",
     color: "#374151",
     fontWeight: 700,
-    cursor: "pointer"
+    cursor: "pointer",
+    whiteSpace: "nowrap"
   },
 
   toolBtnActive: {
@@ -816,24 +832,28 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 6,
-    flexWrap: "wrap",
-    overflow: "hidden"
+    flexWrap: "nowrap",
+    flexShrink: 0
   },
 
   colorDot: {
     width: 18,
     height: 18,
+    minWidth: 18,
+    minHeight: 18,
     borderRadius: "50%",
     cursor: "pointer",
     padding: 0,
-    outline: "none"
+    outline: "none",
+    flexShrink: 0
   },
 
   actionGroup: {
     display: "flex",
     justifyContent: "flex-end",
     gap: 8,
-    flexWrap: "wrap"
+    flexWrap: "nowrap",
+    flexShrink: 0
   },
 
   secondaryBtn: {
@@ -844,7 +864,8 @@ const styles = {
     background: "#ffffff",
     color: "#4b5563",
     fontWeight: 700,
-    cursor: "pointer"
+    cursor: "pointer",
+    whiteSpace: "nowrap"
   },
 
   primaryBtn: {
@@ -856,16 +877,17 @@ const styles = {
     color: "#ffffff",
     fontWeight: 700,
     cursor: "pointer",
-    boxShadow: "0 8px 20px rgba(91,75,255,0.28)"
+    boxShadow: "0 8px 20px rgba(91,75,255,0.28)",
+    whiteSpace: "nowrap"
   },
 
   brushBar: {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    padding: "10px 18px",
-    background: "#fafafe",
-    borderBottom: "1px solid #e5e7eb",
+    marginTop: 8,
+    paddingTop: 8,
+    borderTop: "1px solid #eef0f3",
     flexWrap: "wrap"
   },
 
