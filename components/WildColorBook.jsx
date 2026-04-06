@@ -75,26 +75,42 @@ function AnimalCard({ animal, active, onClick }) {
     <button
       onClick={onClick}
       style={{
-        width: "100%",
+        width: 140,
+        minWidth: 140,
+        maxWidth: 140,
         borderRadius: 22,
         border: active ? "2px solid #5b4bff" : "2px solid #d8d8de",
         background: active ? "#eef0ff" : "#f4f4f6",
-        padding: "22px 12px",
+        padding: "18px 10px",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 10,
-        minHeight: 116,
+        gap: 8,
+        minHeight: 110,
         boxShadow: active ? "0 8px 18px rgba(91,75,255,0.18)" : "none",
-        transition: "all 0.2s ease"
+        transition: "all 0.2s ease",
+        flexShrink: 0
       }}
       onMouseEnter={(e) => { if (!active) e.currentTarget.style.transform = "translateY(-3px)"; }}
       onMouseLeave={(e) => { if (!active) e.currentTarget.style.transform = "translateY(0)"; }}
     >
-      <div style={{ fontSize: 38, lineHeight: 1 }}>{animal.emoji}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: active ? "#4f46e5" : "#4b5563" }}>{animal.name}</div>
+      <div style={{ fontSize: 34, lineHeight: 1 }}>{animal.emoji}</div>
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 700,
+          color: active ? "#4f46e5" : "#4b5563",
+          textAlign: "center",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          width: "100%"
+        }}
+      >
+        {animal.name}
+      </div>
     </button>
   );
 }
@@ -127,12 +143,12 @@ function ReferencePanel({ animal, src, hasFallback }) {
   );
 }
 
-export default function ColoringBook() {
+export default function WildColorBook() {
   // Canvas refs
   const displayCanvasRef = useRef(null);
   const fillCanvasRef = useRef(null);
   const baseCanvasRef = useRef(null);
-  
+
   // State
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
@@ -146,11 +162,11 @@ export default function ColoringBook() {
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const [isDrawing, setIsDrawing] = useState(false);
-  
+
   // Refs for performance
   const isDrawingRef = useRef(false);
   const lastDrawTimeRef = useRef(0);
-  
+
   const animal = ANIMALS[selectedIndex];
   const OUTLINE_THRESHOLD = 120;
   const MAX_UNDO_STEPS = 10;
@@ -178,14 +194,14 @@ export default function ColoringBook() {
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [isReady, selectedIndex]);
+  }, [isReady, loadColoringCanvas]);
 
   // Load reference and coloring images
   const loadAll = useCallback(async () => {
     setUndoStack([]);
     setRedoStack([]);
     await Promise.all([loadColoringCanvas(), loadReferenceImage()]);
-  }, []);
+  }, [loadColoringCanvas, loadReferenceImage]);
 
   const loadReferenceImage = useCallback(async () => {
     try {
@@ -197,6 +213,20 @@ export default function ColoringBook() {
       setReferenceFallback(true);
     }
   }, [animal.reference, referenceFallbackSrc]);
+
+  const redrawAll = useCallback(() => {
+    const displayCanvas = displayCanvasRef.current;
+    const fillCanvas = fillCanvasRef.current;
+    const baseCanvas = baseCanvasRef.current;
+    if (!displayCanvas || !fillCanvas || !baseCanvas) return;
+
+    const displayCtx = displayCanvas.getContext("2d");
+    if (!displayCtx) return;
+
+    displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
+    displayCtx.drawImage(fillCanvas, 0, 0);
+    displayCtx.drawImage(baseCanvas, 0, 0);
+  }, []);
 
   const loadColoringCanvas = useCallback(async () => {
     const displayCanvas = displayCanvasRef.current;
@@ -240,22 +270,7 @@ export default function ColoringBook() {
       redrawAll();
     }
     setIsReady(true);
-  }, [animal.coloring, coloringFallbackSrc]);
-
-  // Redraw display canvas
-  const redrawAll = useCallback(() => {
-    const displayCanvas = displayCanvasRef.current;
-    const fillCanvas = fillCanvasRef.current;
-    const baseCanvas = baseCanvasRef.current;
-    if (!displayCanvas || !fillCanvas || !baseCanvas) return;
-
-    const displayCtx = displayCanvas.getContext("2d");
-    if (!displayCtx) return;
-
-    displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
-    displayCtx.drawImage(fillCanvas, 0, 0);
-    displayCtx.drawImage(baseCanvas, 0, 0);
-  }, []);
+  }, [animal.coloring, coloringFallbackSrc, redrawAll]);
 
   // Color utilities
   const hexToRgba = useCallback((hex) => {
@@ -276,7 +291,8 @@ export default function ColoringBook() {
     if (!canvas) return null;
 
     const rect = canvas.getBoundingClientRect();
-    let clientX = 0, clientY = 0;
+    let clientX = 0;
+    let clientY = 0;
 
     if (e.touches?.[0]) {
       clientX = e.touches[0].clientX;
@@ -331,17 +347,19 @@ export default function ColoringBook() {
     const startIndex = (startY * width + startX) * 4;
 
     // Don't fill on black outlines
-    if (isOutlinePixel(baseData[startIndex], baseData[startIndex+1], baseData[startIndex+2], baseData[startIndex+3])) {
+    if (isOutlinePixel(baseData[startIndex], baseData[startIndex + 1], baseData[startIndex + 2], baseData[startIndex + 3])) {
       return;
     }
 
     const newColor = hexToRgba(selectedColor);
-    
+
     // Skip if already this color
-    if (fillData[startIndex+3] > 0 && 
-        fillData[startIndex] === newColor.r && 
-        fillData[startIndex+1] === newColor.g && 
-        fillData[startIndex+2] === newColor.b) {
+    if (
+      fillData[startIndex + 3] > 0 &&
+      fillData[startIndex] === newColor.r &&
+      fillData[startIndex + 1] === newColor.g &&
+      fillData[startIndex + 2] === newColor.b
+    ) {
       return;
     }
 
@@ -353,26 +371,26 @@ export default function ColoringBook() {
     while (stack.length > 0) {
       const [cx, cy] = stack.pop();
       if (!cx && cx !== 0) continue;
-      
+
       if (cx < 0 || cy < 0 || cx >= width || cy >= height) continue;
-      
+
       const pos = cy * width + cx;
       if (visited[pos]) continue;
       visited[pos] = 1;
 
       const i = pos * 4;
-      
+
       // Stop at black outlines
-      if (isOutlinePixel(baseData[i], baseData[i+1], baseData[i+2], baseData[i+3])) continue;
-      
+      if (isOutlinePixel(baseData[i], baseData[i + 1], baseData[i + 2], baseData[i + 3])) continue;
+
       // Fill the pixel
       fillData[i] = newColor.r;
-      fillData[i+1] = newColor.g;
-      fillData[i+2] = newColor.b;
-      fillData[i+3] = 255;
+      fillData[i + 1] = newColor.g;
+      fillData[i + 2] = newColor.b;
+      fillData[i + 3] = 255;
 
       // Add neighbors to stack
-      stack.push([cx+1, cy], [cx-1, cy], [cx, cy+1], [cx, cy-1]);
+      stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
     }
 
     fillCtx.putImageData(fillImage, 0, 0);
@@ -404,18 +422,20 @@ export default function ColoringBook() {
 
     for (let py = minY; py <= maxY; py++) {
       for (let px = minX; px <= maxX; px++) {
-        const dx = px - x, dy = py - y;
+        const dx = px - x;
+        const dy = py - y;
         if (dx * dx + dy * dy > radius * radius) continue;
 
-        const localX = px - minX, localY = py - minY;
+        const localX = px - minX;
+        const localY = py - minY;
         const i = (localY * localWidth + localX) * 4;
 
-        if (isOutlinePixel(baseData[i], baseData[i+1], baseData[i+2], baseData[i+3])) continue;
+        if (isOutlinePixel(baseData[i], baseData[i + 1], baseData[i + 2], baseData[i + 3])) continue;
 
         fillData[i] = color.r;
-        fillData[i+1] = color.g;
-        fillData[i+2] = color.b;
-        fillData[i+3] = 255;
+        fillData[i + 1] = color.g;
+        fillData[i + 2] = color.b;
+        fillData[i + 3] = 255;
       }
     }
     fillCtx.putImageData(fillImage, minX, minY);
@@ -441,12 +461,17 @@ export default function ColoringBook() {
 
     for (let py = minY; py <= maxY; py++) {
       for (let px = minX; px <= maxX; px++) {
-        const dx = px - x, dy = py - y;
+        const dx = px - x;
+        const dy = py - y;
         if (dx * dx + dy * dy > radius * radius) continue;
 
-        const localX = px - minX, localY = py - minY;
+        const localX = px - minX;
+        const localY = py - minY;
         const i = (localY * localWidth + localX) * 4;
-        fillData[i] = fillData[i+1] = fillData[i+2] = fillData[i+3] = 0;
+        fillData[i] = 0;
+        fillData[i + 1] = 0;
+        fillData[i + 2] = 0;
+        fillData[i + 3] = 0;
       }
     }
     fillCtx.putImageData(fillImage, minX, minY);
@@ -477,7 +502,7 @@ export default function ColoringBook() {
   const handleMove = useCallback((e) => {
     e.preventDefault();
     if (!isReady || !isDrawingRef.current || tool === "bucket") return;
-    
+
     // Throttle to ~60fps for performance
     const now = Date.now();
     if (now - lastDrawTimeRef.current < 16) return;
@@ -505,9 +530,9 @@ export default function ColoringBook() {
 
     const current = fillCtx.getImageData(0, 0, fillCanvas.width, fillCanvas.height);
     const previous = undoStack[undoStack.length - 1];
-    
-    setUndoStack(prev => prev.slice(0, -1));
-    setRedoStack(prev => [...prev, current]);
+
+    setUndoStack((prev) => prev.slice(0, -1));
+    setRedoStack((prev) => [...prev, current]);
     fillCtx.putImageData(previous, 0, 0);
     redrawAll();
   }, [redoStack, redrawAll, undoStack]);
@@ -520,9 +545,9 @@ export default function ColoringBook() {
 
     const current = fillCtx.getImageData(0, 0, fillCanvas.width, fillCanvas.height);
     const next = redoStack[redoStack.length - 1];
-    
-    setRedoStack(prev => prev.slice(0, -1));
-    setUndoStack(prev => [...prev, current]);
+
+    setRedoStack((prev) => prev.slice(0, -1));
+    setUndoStack((prev) => [...prev, current]);
     fillCtx.putImageData(next, 0, 0);
     redrawAll();
   }, [redoStack, redrawAll, undoStack]);
@@ -563,8 +588,8 @@ export default function ColoringBook() {
                 <button
                   key={t}
                   onClick={() => setTool(t)}
-                  style={{ 
-                    ...styles.toolBtn, 
+                  style={{
+                    ...styles.toolBtn,
                     ...(tool === t ? styles.toolBtnActive : {}),
                     transition: "all 0.2s ease"
                   }}
@@ -584,16 +609,17 @@ export default function ColoringBook() {
                     style={{
                       ...styles.colorDot,
                       background: color,
-                      border: selectedColor === color 
-                        ? "3px solid #4f46e5" 
-                        : color === "#ffffff" 
-                          ? "1px solid #d1d5db" 
-                          : "1px solid rgba(255,255,255,0.6)",
+                      border:
+                        selectedColor === color
+                          ? "3px solid #4f46e5"
+                          : color === "#ffffff"
+                            ? "1px solid #d1d5db"
+                            : "1px solid rgba(255,255,255,0.6)",
                       boxShadow: selectedColor === color ? "0 0 0 2px rgba(79,70,229,0.15)" : "none",
                       transition: "transform 0.15s ease"
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.2)"}
-                    onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+                    onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.2)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
                   />
                 ))}
               </div>
@@ -621,12 +647,11 @@ export default function ColoringBook() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <div style={styles.mainGrid}>
-        {/* Animal Selector */}
-        <aside style={styles.leftPanel}>
-          <div style={styles.sideHeading}>🐾 Choose Animal</div>
-          <div style={styles.animalGrid}>
+      {/* NEW TOP ANIMAL ROW */}
+      <section style={styles.animalsTopSection}>
+        <div style={styles.animalsTopHeader}>🐾 Choose Animal</div>
+        <div style={styles.animalsTopScroll}>
+          <div style={styles.animalsTopRow}>
             {ANIMALS.map((item, index) => (
               <AnimalCard
                 key={item.id}
@@ -636,8 +661,11 @@ export default function ColoringBook() {
               />
             ))}
           </div>
-        </aside>
+        </div>
+      </section>
 
+      {/* Main Content */}
+      <div style={styles.mainGrid}>
         {/* Coloring Canvas */}
         <main style={styles.centerPanel}>
           <div style={styles.canvasOuterCard}>
@@ -672,11 +700,11 @@ export default function ColoringBook() {
               />
             </div>
             <div style={styles.centerHelper}>
-              {coloringFallback 
+              {coloringFallback
                 ? `🎨 Fallback image for ${animal.name}. Add /public/images/${animal.id}-coloring.png for custom art.`
-                : tool === "bucket" 
+                : tool === "bucket"
                   ? `🪣 Tap inside shapes to color ${animal.name}`
-                  : tool === "brush" 
+                  : tool === "brush"
                     ? `🖌️ Paint freely inside the lines`
                     : `🧽 Erase colors (outlines stay intact)`}
             </div>
@@ -853,28 +881,39 @@ const styles = {
     width: 140,
     accentColor: "#667eea"
   },
-  mainGrid: {
-    display: "grid",
-    gridTemplateColumns: "280px minmax(400px, 1fr) 300px",
-    gap: 20,
-    padding: 20,
-    alignItems: "start"
+
+  // NEW TOP ANIMAL ROW
+  animalsTopSection: {
+    padding: "16px 20px 8px"
   },
-  leftPanel: {
-    minWidth: 0
-  },
-  sideHeading: {
+  animalsTopHeader: {
     fontSize: 13,
     fontWeight: 700,
     color: "#6b7280",
     letterSpacing: 0.3,
-    marginBottom: 14,
+    marginBottom: 12,
     textTransform: "uppercase"
   },
-  animalGrid: {
+  animalsTopScroll: {
+    overflowX: "auto",
+    overflowY: "hidden",
+    paddingBottom: 8,
+    scrollbarWidth: "thin"
+  },
+  animalsTopRow: {
+    display: "flex",
+    gap: 14,
+    flexWrap: "nowrap",
+    minWidth: "max-content"
+  },
+
+  // MAIN GRID NOW ONLY 2 COLUMNS
+  mainGrid: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 14
+    gridTemplateColumns: "minmax(420px, 1fr) 320px",
+    gap: 20,
+    padding: "8px 20px 20px",
+    alignItems: "start"
   },
   centerPanel: {
     minWidth: 0
