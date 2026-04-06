@@ -759,4 +759,145 @@ const styles = {
     minWidth: 26,
     minHeight: 26,
     borderRadius: "50%",
-    cursor
+    cursor: "pointer",
+    padding: 0,
+    outline: "none",
+    flexShrink: 0,
+    transition: "transform 0.15s ease"
+  },
+  actionGroup: {
+    display: "flex",
+    gap: 8,
+    flexShrink: 0
+  },
+  iconBtn: {
+    height: 42,
+    width: 42,
+    borderRadius: 12,
+    border: "1px solid #e5e7eb",
+    background: "#ffffff",
+    color: "#6b7280",
+    fontWeight: 600,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 18,
+    transition: "all 0.2s ease"
+  },
+  saveBtn: {
+    height: 42,
+    padding: "0 20px",
+    borderRadius: 12,
+    border: "none",
+    background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+    color: "#ffffff",
+    fontWeight: 700,
+    cursor: "pointer",
+    boxShadow: "0 4px 14px rgba(99,102,241,0.4)",
+    whiteSpace: "nowrap",
+    fontSize: 14,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    transition: "all 0.2s ease"
+  },
+  mainGrid: {
+    display: "grid",
+    gridTemplateColumns: "200px minmax(500px, 1fr) 300px",
+    gap: 20,
+    padding: 24,
+    alignItems: "start"
+  },
+  leftPanel: {
+    minWidth: 0
+  },
+  sideHeading: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#9ca3af",
+    letterSpacing: 0.8,
+    marginBottom: 16,
+    textTransform: "uppercase",
+    textAlign: "left",
+    display: "flex",
+    alignItems: "center",
+    gap: 8
+  },
+  animalGrid: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12
+  },
+  centerPanel: {
+    minWidth: 0
+  },
+  canvasOuterCard: {
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
+    padding: 18,
+    boxShadow: "0 4px 24px rgba(0,0,0,0.08)"
+  },
+  canvasInnerBox: {
+    minHeight: 650,
+    borderRadius: 16,
+    background: "#f9fafb",
+    border: "1px solid #e5e7eb",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    overflow: "hidden"
+  },
+  centerHelper: {
+    marginTop: 14,
+    fontSize: 13,
+    color: "#9ca3af",
+    textAlign: "center",
+    fontWeight: 500,
+    lineHeight: 1.5
+  },
+  rightPanel: {
+    minWidth: 0
+  },
+  sideCard: {
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
+    padding: 18,
+    boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
+    display: "flex",
+    flexDirection: "column",
+    height: "100%"
+  },
+  panelTitle: {
+    fontSize: 15,
+    fontWeight: 700,
+    color: "#1f2937",
+    marginBottom: 14,
+    display: "flex",
+    alignItems: "center",
+    gap: 8
+  },
+  previewBox: {
+    flex: 1,
+    minHeight: 400,
+    borderRadius: 14,
+    background: "#f9fafb",
+    border: "1px solid #e5e7eb",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    overflow: "hidden"
+  },
+  helperText: {
+    marginTop: 14,
+    fontSize: 12,
+    color: "#9ca3af",
+    textAlign: "center",
+    fontStyle: "italic",
+    lineHeight: 1.5
+  }
+};
