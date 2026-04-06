@@ -91,9 +91,7 @@ function AnimalCard({ animal, active, onClick }) {
         gap: 8,
         minHeight: 96,
         boxShadow: active ? "0 8px 18px rgba(91,75,255,0.16)" : "none",
-        flexShrink: 0,
-        position: "relative",
-        zIndex: 2
+        flexShrink: 0
       }}
     >
       <div style={{ fontSize: 30, lineHeight: 1 }}>{animal.emoji}</div>
@@ -142,30 +140,28 @@ function ReferencePanel({ animal, src, hasFallback }) {
 }
 
 export default function WildColorBook() {
+  const drawCanvasRef = useRef(null);
   const displayCanvasRef = useRef(null);
-  const fillCanvasRef = useRef(null);
-  const baseCanvasRef = useRef(null);
 
   const undoStackRef = useRef([]);
   const redoStackRef = useRef([]);
+  const isDrawingRef = useRef(false);
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
-  const [tool, setTool] = useState("brush"); // default brush so user can paint immediately
+  const [tool, setTool] = useState("brush");
   const [brushSize, setBrushSize] = useState(16);
   const [canvasSize, setCanvasSize] = useState({ width: 680, height: 680 });
-  const [isReady, setIsReady] = useState(false);
+  const [outlineImg, setOutlineImg] = useState(null);
   const [referenceSrc, setReferenceSrc] = useState("");
   const [referenceFallback, setReferenceFallback] = useState(false);
   const [coloringFallback, setColoringFallback] = useState(false);
   const [undoCount, setUndoCount] = useState(0);
   const [redoCount, setRedoCount] = useState(0);
-
-  const isDrawingRef = useRef(false);
+  const [isReady, setIsReady] = useState(false);
 
   const animal = ANIMALS[selectedIndex];
-  const OUTLINE_THRESHOLD = 160;
-  const MAX_UNDO_STEPS = 15;
+  const MAX_UNDO = 20;
 
   const coloringFallbackSrc = useMemo(
     () => createFallbackColoringSvgDataUrl(animal.name, animal.emoji),
@@ -177,32 +173,84 @@ export default function WildColorBook() {
     [animal.name, animal.emoji]
   );
 
-  const syncHistoryCounts = useCallback(() => {
+  const syncCounts = useCallback(() => {
     setUndoCount(undoStackRef.current.length);
     setRedoCount(redoStackRef.current.length);
   }, []);
 
-  const redrawAll = useCallback(() => {
+  const redraw = useCallback(() => {
     const displayCanvas = displayCanvasRef.current;
-    const fillCanvas = fillCanvasRef.current;
-    const baseCanvas = baseCanvasRef.current;
-    if (!displayCanvas || !fillCanvas || !baseCanvas) return;
+    const drawCanvas = drawCanvasRef.current;
+    if (!displayCanvas || !drawCanvas || !outlineImg) return;
 
-    const displayCtx = displayCanvas.getContext("2d");
-    if (!displayCtx) return;
+    const ctx = displayCanvas.getContext("2d");
+    if (!ctx) return;
 
-    displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
-    displayCtx.drawImage(fillCanvas, 0, 0);
-    displayCtx.drawImage(baseCanvas, 0, 0);
-  }, []);
+    ctx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
+
+    // white background
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, displayCanvas.width, displayCanvas.height);
+
+    // colored drawing layer
+    ctx.drawImage(drawCanvas, 0, 0);
+
+    // outline on top
+    ctx.drawImage(outlineImg, 0, 0, displayCanvas.width, displayCanvas.height);
+  }, [outlineImg]);
 
   const clearHistory = useCallback(() => {
     undoStackRef.current = [];
     redoStackRef.current = [];
-    syncHistoryCounts();
-  }, [syncHistoryCounts]);
+    syncCounts();
+  }, [syncCounts]);
 
-  const loadReferenceImage = useCallback(async () => {
+  const captureSnapshot = useCallback(() => {
+    const drawCanvas = drawCanvasRef.current;
+    if (!drawCanvas) return null;
+    const ctx = drawCanvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    return ctx.getImageData(0, 0, drawCanvas.width, drawCanvas.height);
+  }, []);
+
+  const pushUndo = useCallback(() => {
+    const snapshot = captureSnapshot();
+    if (!snapshot) return;
+
+    undoStackRef.current.push(snapshot);
+    if (undoStackRef.current.length > MAX_UNDO) {
+      undoStackRef.current.shift();
+    }
+    redoStackRef.current = [];
+    syncCounts();
+  }, [captureSnapshot, syncCounts]);
+
+  const getCanvasPoint = useCallback((e) => {
+    const canvas = displayCanvasRef.current;
+    if (!canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX = 0;
+    let clientY = 0;
+
+    if (e.touches?.[0]) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if (e.changedTouches?.[0]) {
+      clientX = e.changedTouches[0].clientX;
+      clientY = e.changedTouches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    return {
+      x: ((clientX - rect.left) / rect.width) * canvas.width,
+      y: ((clientY - rect.top) / rect.height) * canvas.height
+    };
+  }, []);
+
+  const loadReference = useCallback(async () => {
     try {
       await loadImage(animal.reference);
       setReferenceSrc(animal.reference);
@@ -213,11 +261,10 @@ export default function WildColorBook() {
     }
   }, [animal.reference, referenceFallbackSrc]);
 
-  const loadColoringCanvas = useCallback(async () => {
+  const loadAnimal = useCallback(async () => {
     const displayCanvas = displayCanvasRef.current;
-    const fillCanvas = fillCanvasRef.current;
-    const baseCanvas = baseCanvasRef.current;
-    if (!displayCanvas || !fillCanvas || !baseCanvas) return;
+    const drawCanvas = drawCanvasRef.current;
+    if (!displayCanvas || !drawCanvas) return;
 
     setIsReady(false);
 
@@ -242,272 +289,83 @@ export default function WildColorBook() {
 
     setCanvasSize({ width, height });
 
-    [displayCanvas, fillCanvas, baseCanvas].forEach((canvas) => {
-      canvas.width = width;
-      canvas.height = height;
-    });
+    displayCanvas.width = width;
+    displayCanvas.height = height;
+    drawCanvas.width = width;
+    drawCanvas.height = height;
 
-    const baseCtx = baseCanvas.getContext("2d", { willReadFrequently: true });
-    const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
-
-    if (baseCtx && fillCtx) {
-      baseCtx.clearRect(0, 0, width, height);
-      fillCtx.clearRect(0, 0, width, height);
-      baseCtx.drawImage(img, 0, 0, width, height);
-      redrawAll();
-      setIsReady(true);
+    const drawCtx = drawCanvas.getContext("2d");
+    if (drawCtx) {
+      drawCtx.clearRect(0, 0, width, height);
     }
-  }, [animal.coloring, coloringFallbackSrc, redrawAll]);
 
-  const loadAll = useCallback(async () => {
     clearHistory();
-    await Promise.all([loadColoringCanvas(), loadReferenceImage()]);
-  }, [clearHistory, loadColoringCanvas, loadReferenceImage]);
+    setOutlineImg(img);
+    setIsReady(true);
+  }, [animal.coloring, clearHistory, coloringFallbackSrc]);
 
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+    let active = true;
+
+    (async () => {
+      await Promise.all([loadAnimal(), loadReference()]);
+      if (!active) return;
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [loadAnimal, loadReference]);
 
   useEffect(() => {
-    const handleResize = () => {
-      loadColoringCanvas();
+    redraw();
+  }, [outlineImg, canvasSize, redraw]);
+
+  useEffect(() => {
+    const onResize = () => {
+      loadAnimal();
     };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [loadAnimal]);
 
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [loadColoringCanvas]);
+  const drawCircle = useCallback((x, y, erase = false) => {
+    const drawCanvas = drawCanvasRef.current;
+    if (!drawCanvas) return;
+    const ctx = drawCanvas.getContext("2d");
+    if (!ctx) return;
 
-  const hexToRgba = useCallback((hex) => {
-    let c = hex.replace("#", "");
-    if (c.length === 3) c = c.split("").map((x) => x + x).join("");
-    const num = parseInt(c, 16);
-    return {
-      r: (num >> 16) & 255,
-      g: (num >> 8) & 255,
-      b: num & 255,
-      a: 255
-    };
-  }, []);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(4, brushSize / 2), 0, Math.PI * 2);
 
-  const isOutlinePixel = useCallback((r, g, b, a) => {
-    if (a < 10) return false;
-    return (r + g + b) / 3 < OUTLINE_THRESHOLD;
-  }, []);
-
-  const getCanvasPoint = useCallback((e) => {
-    const canvas = displayCanvasRef.current;
-    if (!canvas) return null;
-
-    const rect = canvas.getBoundingClientRect();
-    let clientX = 0;
-    let clientY = 0;
-
-    if (e.touches?.[0]) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else if (e.changedTouches?.[0]) {
-      clientX = e.changedTouches[0].clientX;
-      clientY = e.changedTouches[0].clientY;
+    if (erase) {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.fill();
     } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = selectedColor;
+      ctx.fill();
     }
 
-    return {
-      x: Math.floor(((clientX - rect.left) / rect.width) * canvas.width),
-      y: Math.floor(((clientY - rect.top) / rect.height) * canvas.height)
-    };
-  }, []);
+    ctx.restore();
+    redraw();
+  }, [brushSize, redraw, selectedColor]);
 
-  const captureSnapshot = useCallback(() => {
-    const fillCanvas = fillCanvasRef.current;
-    if (!fillCanvas) return null;
+  const bucketFillAll = useCallback(() => {
+    const drawCanvas = drawCanvasRef.current;
+    if (!drawCanvas) return;
+    const ctx = drawCanvas.getContext("2d");
+    if (!ctx) return;
 
-    const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
-    if (!fillCtx) return null;
-
-    return fillCtx.getImageData(0, 0, fillCanvas.width, fillCanvas.height);
-  }, []);
-
-  const pushUndoSnapshot = useCallback(() => {
-    const snapshot = captureSnapshot();
-    if (!snapshot) return;
-
-    undoStackRef.current.push(snapshot);
-
-    if (undoStackRef.current.length > MAX_UNDO_STEPS) {
-      undoStackRef.current.shift();
-    }
-
-    redoStackRef.current = [];
-    syncHistoryCounts();
-  }, [captureSnapshot, syncHistoryCounts]);
-
-  const floodFill = useCallback((startX, startY) => {
-    const baseCanvas = baseCanvasRef.current;
-    const fillCanvas = fillCanvasRef.current;
-    if (!baseCanvas || !fillCanvas) return;
-
-    const baseCtx = baseCanvas.getContext("2d", { willReadFrequently: true });
-    const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
-    if (!baseCtx || !fillCtx) return;
-
-    const width = baseCanvas.width;
-    const height = baseCanvas.height;
-
-    if (startX < 0 || startY < 0 || startX >= width || startY >= height) return;
-
-    const baseImage = baseCtx.getImageData(0, 0, width, height);
-    const fillImage = fillCtx.getImageData(0, 0, width, height);
-
-    const baseData = baseImage.data;
-    const fillData = fillImage.data;
-
-    const startIndex = (startY * width + startX) * 4;
-
-    if (
-      isOutlinePixel(
-        baseData[startIndex],
-        baseData[startIndex + 1],
-        baseData[startIndex + 2],
-        baseData[startIndex + 3]
-      )
-    ) {
-      return;
-    }
-
-    const newColor = hexToRgba(selectedColor);
-
-    if (
-      fillData[startIndex + 3] > 0 &&
-      fillData[startIndex] === newColor.r &&
-      fillData[startIndex + 1] === newColor.g &&
-      fillData[startIndex + 2] === newColor.b
-    ) {
-      return;
-    }
-
-    pushUndoSnapshot();
-
-    const visited = new Uint8Array(width * height);
-    const stack = [[startX, startY]];
-
-    while (stack.length > 0) {
-      const [cx, cy] = stack.pop();
-
-      if (cx < 0 || cy < 0 || cx >= width || cy >= height) continue;
-
-      const pos = cy * width + cx;
-      if (visited[pos]) continue;
-      visited[pos] = 1;
-
-      const i = pos * 4;
-
-      if (isOutlinePixel(baseData[i], baseData[i + 1], baseData[i + 2], baseData[i + 3])) continue;
-
-      fillData[i] = newColor.r;
-      fillData[i + 1] = newColor.g;
-      fillData[i + 2] = newColor.b;
-      fillData[i + 3] = 255;
-
-      stack.push([cx + 1, cy]);
-      stack.push([cx - 1, cy]);
-      stack.push([cx, cy + 1]);
-      stack.push([cx, cy - 1]);
-    }
-
-    fillCtx.putImageData(fillImage, 0, 0);
-    redrawAll();
-  }, [hexToRgba, isOutlinePixel, pushUndoSnapshot, redrawAll, selectedColor]);
-
-  const drawBrushDot = useCallback((x, y) => {
-    const fillCanvas = fillCanvasRef.current;
-    const baseCanvas = baseCanvasRef.current;
-    if (!fillCanvas || !baseCanvas) return;
-
-    const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
-    const baseCtx = baseCanvas.getContext("2d", { willReadFrequently: true });
-    if (!fillCtx || !baseCtx) return;
-
-    const radius = Math.max(2, Math.floor(brushSize / 2));
-    const color = hexToRgba(selectedColor);
-
-    const minX = Math.max(0, x - radius);
-    const maxX = Math.min(fillCanvas.width - 1, x + radius);
-    const minY = Math.max(0, y - radius);
-    const maxY = Math.min(fillCanvas.height - 1, y + radius);
-
-    const w = maxX - minX + 1;
-    const h = maxY - minY + 1;
-
-    const fillImage = fillCtx.getImageData(minX, minY, w, h);
-    const baseImage = baseCtx.getImageData(minX, minY, w, h);
-
-    const fillData = fillImage.data;
-    const baseData = baseImage.data;
-
-    for (let py = minY; py <= maxY; py++) {
-      for (let px = minX; px <= maxX; px++) {
-        const dx = px - x;
-        const dy = py - y;
-        if (dx * dx + dy * dy > radius * radius) continue;
-
-        const localX = px - minX;
-        const localY = py - minY;
-        const i = (localY * w + localX) * 4;
-
-        if (isOutlinePixel(baseData[i], baseData[i + 1], baseData[i + 2], baseData[i + 3])) continue;
-
-        fillData[i] = color.r;
-        fillData[i + 1] = color.g;
-        fillData[i + 2] = color.b;
-        fillData[i + 3] = 255;
-      }
-    }
-
-    fillCtx.putImageData(fillImage, minX, minY);
-    redrawAll();
-  }, [brushSize, hexToRgba, isOutlinePixel, redrawAll, selectedColor]);
-
-  const eraseDot = useCallback((x, y) => {
-    const fillCanvas = fillCanvasRef.current;
-    if (!fillCanvas) return;
-
-    const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
-    if (!fillCtx) return;
-
-    const radius = Math.max(4, Math.floor(brushSize / 2));
-    const minX = Math.max(0, x - radius);
-    const maxX = Math.min(fillCanvas.width - 1, x + radius);
-    const minY = Math.max(0, y - radius);
-    const maxY = Math.min(fillCanvas.height - 1, y + radius);
-
-    const w = maxX - minX + 1;
-    const h = maxY - minY + 1;
-
-    const fillImage = fillCtx.getImageData(minX, minY, w, h);
-    const fillData = fillImage.data;
-
-    for (let py = minY; py <= maxY; py++) {
-      for (let px = minX; px <= maxX; px++) {
-        const dx = px - x;
-        const dy = py - y;
-        if (dx * dx + dy * dy > radius * radius) continue;
-
-        const localX = px - minX;
-        const localY = py - minY;
-        const i = (localY * w + localX) * 4;
-
-        fillData[i] = 0;
-        fillData[i + 1] = 0;
-        fillData[i + 2] = 0;
-        fillData[i + 3] = 0;
-      }
-    }
-
-    fillCtx.putImageData(fillImage, minX, minY);
-    redrawAll();
-  }, [brushSize, redrawAll]);
+    pushUndo();
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = selectedColor;
+    ctx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+    ctx.restore();
+    redraw();
+  }, [pushUndo, redraw, selectedColor]);
 
   const handleStart = useCallback((e) => {
     e.preventDefault();
@@ -517,34 +375,34 @@ export default function WildColorBook() {
     if (!point) return;
 
     if (tool === "bucket") {
-      floodFill(point.x, point.y);
+      bucketFillAll();
       return;
     }
 
-    pushUndoSnapshot();
+    pushUndo();
     isDrawingRef.current = true;
 
     if (tool === "brush") {
-      drawBrushDot(point.x, point.y);
+      drawCircle(point.x, point.y, false);
     } else if (tool === "eraser") {
-      eraseDot(point.x, point.y);
+      drawCircle(point.x, point.y, true);
     }
-  }, [drawBrushDot, eraseDot, floodFill, getCanvasPoint, isReady, pushUndoSnapshot, tool]);
+  }, [bucketFillAll, drawCircle, getCanvasPoint, isReady, pushUndo, tool]);
 
   const handleMove = useCallback((e) => {
     e.preventDefault();
-
-    if (!isReady || !isDrawingRef.current || tool === "bucket") return;
+    if (!isReady || !isDrawingRef.current) return;
+    if (tool === "bucket") return;
 
     const point = getCanvasPoint(e);
     if (!point) return;
 
     if (tool === "brush") {
-      drawBrushDot(point.x, point.y);
+      drawCircle(point.x, point.y, false);
     } else if (tool === "eraser") {
-      eraseDot(point.x, point.y);
+      drawCircle(point.x, point.y, true);
     }
-  }, [drawBrushDot, eraseDot, getCanvasPoint, isReady, tool]);
+  }, [drawCircle, getCanvasPoint, isReady, tool]);
 
   const handleEnd = useCallback((e) => {
     if (e) e.preventDefault();
@@ -552,11 +410,10 @@ export default function WildColorBook() {
   }, []);
 
   const handleUndo = useCallback(() => {
-    const fillCanvas = fillCanvasRef.current;
-    if (!fillCanvas || undoStackRef.current.length === 0) return;
-
-    const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
-    if (!fillCtx) return;
+    const drawCanvas = drawCanvasRef.current;
+    if (!drawCanvas || undoStackRef.current.length === 0) return;
+    const ctx = drawCanvas.getContext("2d");
+    if (!ctx) return;
 
     const current = captureSnapshot();
     const previous = undoStackRef.current.pop();
@@ -564,17 +421,16 @@ export default function WildColorBook() {
     if (!current || !previous) return;
 
     redoStackRef.current.push(current);
-    fillCtx.putImageData(previous, 0, 0);
-    redrawAll();
-    syncHistoryCounts();
-  }, [captureSnapshot, redrawAll, syncHistoryCounts]);
+    ctx.putImageData(previous, 0, 0);
+    redraw();
+    syncCounts();
+  }, [captureSnapshot, redraw, syncCounts]);
 
   const handleRedo = useCallback(() => {
-    const fillCanvas = fillCanvasRef.current;
-    if (!fillCanvas || redoStackRef.current.length === 0) return;
-
-    const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
-    if (!fillCtx) return;
+    const drawCanvas = drawCanvasRef.current;
+    if (!drawCanvas || redoStackRef.current.length === 0) return;
+    const ctx = drawCanvas.getContext("2d");
+    if (!ctx) return;
 
     const current = captureSnapshot();
     const next = redoStackRef.current.pop();
@@ -582,22 +438,21 @@ export default function WildColorBook() {
     if (!current || !next) return;
 
     undoStackRef.current.push(current);
-    fillCtx.putImageData(next, 0, 0);
-    redrawAll();
-    syncHistoryCounts();
-  }, [captureSnapshot, redrawAll, syncHistoryCounts]);
+    ctx.putImageData(next, 0, 0);
+    redraw();
+    syncCounts();
+  }, [captureSnapshot, redraw, syncCounts]);
 
   const handleReset = useCallback(() => {
-    const fillCanvas = fillCanvasRef.current;
-    if (!fillCanvas) return;
+    const drawCanvas = drawCanvasRef.current;
+    if (!drawCanvas) return;
+    const ctx = drawCanvas.getContext("2d");
+    if (!ctx) return;
 
-    const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
-    if (!fillCtx) return;
-
-    pushUndoSnapshot();
-    fillCtx.clearRect(0, 0, fillCanvas.width, fillCanvas.height);
-    redrawAll();
-  }, [pushUndoSnapshot, redrawAll]);
+    pushUndo();
+    ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    redraw();
+  }, [pushUndo, redraw]);
 
   const handleSave = useCallback(() => {
     const displayCanvas = displayCanvasRef.current;
@@ -712,7 +567,7 @@ export default function WildColorBook() {
           <span style={styles.brushLabel}>Brush: {brushSize}px</span>
           <input
             type="range"
-            min="6"
+            min="8"
             max="40"
             value={brushSize}
             onChange={(e) => setBrushSize(Number(e.target.value))}
@@ -741,8 +596,7 @@ export default function WildColorBook() {
         <main style={styles.centerPanel}>
           <div style={styles.canvasOuterCard}>
             <div style={styles.canvasInnerBox}>
-              <canvas ref={baseCanvasRef} style={{ display: "none" }} />
-              <canvas ref={fillCanvasRef} style={{ display: "none" }} />
+              <canvas ref={drawCanvasRef} style={{ display: "none" }} />
 
               <canvas
                 ref={displayCanvasRef}
@@ -767,9 +621,7 @@ export default function WildColorBook() {
                   cursor: tool === "bucket" ? "pointer" : "crosshair",
                   touchAction: "none",
                   userSelect: "none",
-                  WebkitUserSelect: "none",
-                  position: "relative",
-                  zIndex: 1
+                  WebkitUserSelect: "none"
                 }}
                 draggable={false}
               />
@@ -778,11 +630,13 @@ export default function WildColorBook() {
             <div style={styles.centerHelper}>
               {!isReady
                 ? "Loading..."
-                : tool === "bucket"
-                  ? `Bucket mode: click inside shape`
-                  : tool === "brush"
-                    ? `Brush mode: drag to paint`
-                    : `Eraser mode: drag to erase`}
+                : coloringFallback
+                  ? `Fallback image for ${animal.name}.`
+                  : tool === "bucket"
+                    ? "Bucket mode: fills full page color safely"
+                    : tool === "brush"
+                      ? "Brush mode: drag to color"
+                      : "Eraser mode: drag to erase"}
             </div>
           </div>
         </main>
@@ -807,18 +661,15 @@ const styles = {
     borderBottom: "1px solid #e5e7eb",
     position: "sticky",
     top: 0,
-    zIndex: 9999, // IMPORTANT: top bar always above all
+    zIndex: 9999,
     padding: "10px 14px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-    pointerEvents: "auto"
+    boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
   },
   topRow: {
     display: "grid",
     gridTemplateColumns: "160px minmax(0, 1fr) auto",
     alignItems: "center",
-    gap: 12,
-    position: "relative",
-    zIndex: 9999
+    gap: 12
   },
   brandBox: {
     display: "flex",
@@ -848,16 +699,12 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    overflow: "hidden",
-    position: "relative",
-    zIndex: 9999
+    overflow: "hidden"
   },
   toolGroup: {
     display: "flex",
     gap: 8,
-    flexShrink: 0,
-    position: "relative",
-    zIndex: 9999
+    flexShrink: 0
   },
   toolBtn: {
     height: 52,
@@ -869,10 +716,7 @@ const styles = {
     fontWeight: 800,
     cursor: "pointer",
     fontSize: 16,
-    whiteSpace: "nowrap",
-    pointerEvents: "auto",
-    position: "relative",
-    zIndex: 9999
+    whiteSpace: "nowrap"
   },
   toolBtnActive: {
     background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -886,9 +730,7 @@ const styles = {
     overflowY: "hidden",
     flex: 1,
     paddingBottom: 4,
-    scrollbarWidth: "thin",
-    position: "relative",
-    zIndex: 9999
+    scrollbarWidth: "thin"
   },
   paletteWrap: {
     display: "flex",
@@ -907,18 +749,14 @@ const styles = {
     cursor: "pointer",
     padding: 0,
     outline: "none",
-    flexShrink: 0,
-    position: "relative",
-    zIndex: 9999
+    flexShrink: 0
   },
   actionGroup: {
     display: "flex",
     justifyContent: "flex-end",
     gap: 8,
     flexWrap: "nowrap",
-    flexShrink: 0,
-    position: "relative",
-    zIndex: 9999
+    flexShrink: 0
   },
   secondaryBtn: {
     height: 44,
@@ -932,9 +770,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 18,
-    position: "relative",
-    zIndex: 9999
+    fontSize: 18
   },
   primaryBtn: {
     height: 44,
@@ -950,9 +786,7 @@ const styles = {
     fontSize: 14,
     display: "flex",
     alignItems: "center",
-    gap: 6,
-    position: "relative",
-    zIndex: 9999
+    gap: 6
   },
   brushBar: {
     display: "flex",
@@ -961,9 +795,7 @@ const styles = {
     marginTop: 8,
     paddingTop: 8,
     borderTop: "1px solid #f3f4f6",
-    flexWrap: "wrap",
-    position: "relative",
-    zIndex: 9999
+    flexWrap: "wrap"
   },
   brushLabel: {
     fontSize: 13,
@@ -975,9 +807,7 @@ const styles = {
     accentColor: "#667eea"
   },
   animalsTopSection: {
-    padding: "14px 16px 8px",
-    position: "relative",
-    zIndex: 1
+    padding: "14px 16px 8px"
   },
   animalsTopHeader: {
     fontSize: 13,
@@ -1004,9 +834,7 @@ const styles = {
     gridTemplateColumns: "minmax(0, 1fr) 300px",
     gap: 18,
     padding: "8px 16px 20px",
-    alignItems: "start",
-    position: "relative",
-    zIndex: 1
+    alignItems: "start"
   },
   centerPanel: {
     minWidth: 0
@@ -1027,9 +855,7 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     padding: 12,
-    overflow: "hidden",
-    position: "relative",
-    zIndex: 1
+    overflow: "hidden"
   },
   centerHelper: {
     marginTop: 12,
