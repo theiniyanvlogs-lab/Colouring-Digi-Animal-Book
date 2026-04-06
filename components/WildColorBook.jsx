@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const COLORS = [
   "#ff1f1f", "#ff4d4f", "#ff6b6b", "#ff7a00", "#ff9f1a", "#ffb84d", "#ffd400", "#ffe066",
@@ -16,7 +16,7 @@ const ANIMALS = [
   { id: "giraffe", name: "Giraffe", emoji: "🦒", coloring: "/images/giraffe-coloring.png", reference: "/reference/giraffe-reference.png" },
   { id: "owl", name: "Owl", emoji: "🦉", coloring: "/images/owl-coloring.png", reference: "/reference/owl-reference.png" },
   { id: "cat", name: "Cat", emoji: "🐱", coloring: "/images/cat-coloring.png", reference: "/reference/cat-reference.png" },
-  { id: "puppy", name: "Puppy", emoji: "🐶", coloring: "/images/puppy-coloring.png", reference: "/reference/puppy-reference.png" },
+  { id: "puppy", name: "Puppy", emoji: "🐶", coloring: "/images/puppy-coloring.png", reference: "/reference/puppy-reference.png" }
 ];
 
 function createFallbackColoringSvgDataUrl(label, emoji) {
@@ -39,9 +39,12 @@ function createFallbackColoringSvgDataUrl(label, emoji) {
 
 function createFallbackReferenceSvgDataUrl(label, emoji) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900" viewBox="0 0 900 900">
-    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#dff4ff"/><stop offset="100%" stop-color="#fef3c7"/>
-    </linearGradient></defs>
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#dff4ff"/>
+        <stop offset="100%" stop-color="#fef3c7"/>
+      </linearGradient>
+    </defs>
     <rect width="100%" height="100%" fill="url(#g)"/>
     <circle cx="450" cy="350" r="180" fill="#ffd54f" stroke="#111" stroke-width="18"/>
     <circle cx="360" cy="220" r="70" fill="#ffcc80" stroke="#111" stroke-width="18"/>
@@ -60,7 +63,7 @@ function createFallbackReferenceSvgDataUrl(label, emoji) {
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
-    const img = new Image();
+    const img = new window.Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error(`Image load failed: ${src}`));
@@ -73,32 +76,24 @@ function AnimalCard({ animal, active, onClick }) {
     <button
       onClick={onClick}
       style={{
-        width: 140,
-        minWidth: 140,
-        maxWidth: 140,
-        borderRadius: 22,
+        width: 132,
+        minWidth: 132,
+        borderRadius: 20,
         border: active ? "2px solid #5b4bff" : "2px solid #d8d8de",
-        background: active ? "#eef0ff" : "#f4f4f6",
-        padding: "18px 10px",
+        background: active ? "#eef0ff" : "#f8fafc",
+        padding: "14px 10px",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         gap: 8,
-        minHeight: 110,
-        boxShadow: active ? "0 8px 18px rgba(91,75,255,0.18)" : "none",
-        transition: "all 0.2s ease",
+        minHeight: 96,
+        boxShadow: active ? "0 8px 18px rgba(91,75,255,0.16)" : "none",
         flexShrink: 0
       }}
-      onMouseEnter={(e) => {
-        if (!active) e.currentTarget.style.transform = "translateY(-3px)";
-      }}
-      onMouseLeave={(e) => {
-        if (!active) e.currentTarget.style.transform = "translateY(0)";
-      }}
     >
-      <div style={{ fontSize: 34, lineHeight: 1 }}>{animal.emoji}</div>
+      <div style={{ fontSize: 30, lineHeight: 1 }}>{animal.emoji}</div>
       <div
         style={{
           fontSize: 14,
@@ -129,7 +124,7 @@ function ReferencePanel({ animal, src, hasFallback }) {
             width: "100%",
             height: "100%",
             objectFit: "contain",
-            borderRadius: 18,
+            borderRadius: 16,
             background: "#f3f4f6"
           }}
           draggable={false}
@@ -137,8 +132,8 @@ function ReferencePanel({ animal, src, hasFallback }) {
       </div>
       <div style={styles.helperText}>
         {hasFallback
-          ? "🎨 Fallback reference shown. Upload your custom image to /public/reference/"
-          : "🎯 Match these colors or create your own style!"}
+          ? "Fallback reference shown."
+          : "Use this as your color guide."}
       </div>
     </div>
   );
@@ -153,7 +148,7 @@ export default function WildColorBook() {
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [tool, setTool] = useState("bucket");
   const [brushSize, setBrushSize] = useState(16);
-  const [canvasSize, setCanvasSize] = useState({ width: 760, height: 760 });
+  const [canvasSize, setCanvasSize] = useState({ width: 680, height: 680 });
   const [isReady, setIsReady] = useState(false);
   const [referenceSrc, setReferenceSrc] = useState("");
   const [referenceFallback, setReferenceFallback] = useState(false);
@@ -165,7 +160,7 @@ export default function WildColorBook() {
   const lastDrawTimeRef = useRef(0);
 
   const animal = ANIMALS[selectedIndex];
-  const OUTLINE_THRESHOLD = 120;
+  const OUTLINE_THRESHOLD = 160;
   const MAX_UNDO_STEPS = 10;
 
   const coloringFallbackSrc = useMemo(
@@ -220,10 +215,12 @@ export default function WildColorBook() {
       setColoringFallback(true);
     }
 
-    const screenWidth = typeof window !== "undefined" ? window.innerWidth : 1440;
-    const isMobile = screenWidth < 1100;
-    const maxW = isMobile ? Math.min(screenWidth - 60, 760) : 760;
-    const maxH = 760;
+    const screenWidth = typeof window !== "undefined" ? window.innerWidth : 1365;
+    const isMobile = screenWidth < 1024;
+
+    const maxW = isMobile ? Math.min(screenWidth - 40, 640) : 680;
+    const maxH = isMobile ? 640 : 680;
+
     const ratio = Math.min(maxW / img.width, maxH / img.height);
     const width = Math.max(320, Math.round(img.width * ratio));
     const height = Math.max(320, Math.round(img.height * ratio));
@@ -241,14 +238,14 @@ export default function WildColorBook() {
     if (baseCtx && fillCtx) {
       baseCtx.clearRect(0, 0, width, height);
       fillCtx.clearRect(0, 0, width, height);
-      baseCtx.drawImage(img, 0, 0, width, height);
-      redrawAll();
-    }
 
-    setIsReady(true);
+      baseCtx.drawImage(img, 0, 0, width, height);
+
+      redrawAll();
+      setIsReady(true);
+    }
   }, [animal.coloring, coloringFallbackSrc, redrawAll]);
 
-  // SAFE: declared AFTER dependencies
   const loadAll = useCallback(async () => {
     setUndoStack([]);
     setRedoStack([]);
@@ -261,12 +258,12 @@ export default function WildColorBook() {
 
   useEffect(() => {
     const handleResize = () => {
-      if (isReady) loadColoringCanvas();
+      loadColoringCanvas();
     };
 
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [isReady, loadColoringCanvas]);
+  }, [loadColoringCanvas]);
 
   const hexToRgba = useCallback((hex) => {
     let c = hex.replace("#", "");
@@ -320,8 +317,8 @@ export default function WildColorBook() {
     const snapshot = fillCtx.getImageData(0, 0, fillCanvas.width, fillCanvas.height);
 
     setUndoStack((prev) => {
-      const newStack = [...prev, snapshot];
-      return newStack.slice(-MAX_UNDO_STEPS);
+      const next = [...prev, snapshot];
+      return next.slice(-MAX_UNDO_STEPS);
     });
 
     setRedoStack([]);
@@ -338,15 +335,23 @@ export default function WildColorBook() {
 
     const width = baseCanvas.width;
     const height = baseCanvas.height;
+
     if (startX < 0 || startY < 0 || startX >= width || startY >= height) return;
 
     const baseImage = baseCtx.getImageData(0, 0, width, height);
     const fillImage = fillCtx.getImageData(0, 0, width, height);
+
     const baseData = baseImage.data;
     const fillData = fillImage.data;
+
     const startIndex = (startY * width + startX) * 4;
 
-    if (isOutlinePixel(baseData[startIndex], baseData[startIndex + 1], baseData[startIndex + 2], baseData[startIndex + 3])) {
+    if (isOutlinePixel(
+      baseData[startIndex],
+      baseData[startIndex + 1],
+      baseData[startIndex + 2],
+      baseData[startIndex + 3]
+    )) {
       return;
     }
 
@@ -384,7 +389,10 @@ export default function WildColorBook() {
       fillData[i + 2] = newColor.b;
       fillData[i + 3] = 255;
 
-      stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+      stack.push([cx + 1, cy]);
+      stack.push([cx - 1, cy]);
+      stack.push([cx, cy + 1]);
+      stack.push([cx, cy - 1]);
     }
 
     fillCtx.putImageData(fillImage, 0, 0);
@@ -408,12 +416,14 @@ export default function WildColorBook() {
     const minY = Math.max(0, y - radius);
     const maxY = Math.min(fillCanvas.height - 1, y + radius);
 
-    const fillImage = fillCtx.getImageData(minX, minY, maxX - minX + 1, maxY - minY + 1);
-    const baseImage = baseCtx.getImageData(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    const w = maxX - minX + 1;
+    const h = maxY - minY + 1;
+
+    const fillImage = fillCtx.getImageData(minX, minY, w, h);
+    const baseImage = baseCtx.getImageData(minX, minY, w, h);
 
     const fillData = fillImage.data;
     const baseData = baseImage.data;
-    const localWidth = maxX - minX + 1;
 
     for (let py = minY; py <= maxY; py++) {
       for (let px = minX; px <= maxX; px++) {
@@ -423,7 +433,7 @@ export default function WildColorBook() {
 
         const localX = px - minX;
         const localY = py - minY;
-        const i = (localY * localWidth + localX) * 4;
+        const i = (localY * w + localX) * 4;
 
         if (isOutlinePixel(baseData[i], baseData[i + 1], baseData[i + 2], baseData[i + 3])) continue;
 
@@ -451,9 +461,11 @@ export default function WildColorBook() {
     const minY = Math.max(0, y - radius);
     const maxY = Math.min(fillCanvas.height - 1, y + radius);
 
-    const fillImage = fillCtx.getImageData(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    const w = maxX - minX + 1;
+    const h = maxY - minY + 1;
+
+    const fillImage = fillCtx.getImageData(minX, minY, w, h);
     const fillData = fillImage.data;
-    const localWidth = maxX - minX + 1;
 
     for (let py = minY; py <= maxY; py++) {
       for (let px = minX; px <= maxX; px++) {
@@ -463,7 +475,7 @@ export default function WildColorBook() {
 
         const localX = px - minX;
         const localY = py - minY;
-        const i = (localY * localWidth + localX) * 4;
+        const i = (localY * w + localX) * 4;
 
         fillData[i] = 0;
         fillData[i + 1] = 0;
@@ -492,12 +504,16 @@ export default function WildColorBook() {
     isDrawingRef.current = true;
     lastDrawTimeRef.current = Date.now();
 
-    if (tool === "brush") drawBrushDot(point.x, point.y);
-    else eraseDot(point.x, point.y);
+    if (tool === "brush") {
+      drawBrushDot(point.x, point.y);
+    } else {
+      eraseDot(point.x, point.y);
+    }
   }, [drawBrushDot, eraseDot, floodFill, getCanvasPoint, isReady, pushUndoSnapshot, tool]);
 
   const handleMove = useCallback((e) => {
     e.preventDefault();
+
     if (!isReady || !isDrawingRef.current || tool === "bucket") return;
 
     const now = Date.now();
@@ -507,8 +523,11 @@ export default function WildColorBook() {
     const point = getCanvasPoint(e);
     if (!point) return;
 
-    if (tool === "brush") drawBrushDot(point.x, point.y);
-    else eraseDot(point.x, point.y);
+    if (tool === "brush") {
+      drawBrushDot(point.x, point.y);
+    } else {
+      eraseDot(point.x, point.y);
+    }
   }, [drawBrushDot, eraseDot, getCanvasPoint, isReady, tool]);
 
   const handleEnd = useCallback((e) => {
@@ -685,11 +704,12 @@ export default function WildColorBook() {
                   maxWidth: "100%",
                   maxHeight: "100%",
                   display: "block",
-                  borderRadius: 18,
-                  background: "#f3f4f6",
+                  borderRadius: 16,
+                  background: "#ffffff",
                   cursor: tool === "bucket" ? "pointer" : "crosshair",
                   touchAction: "none",
-                  userSelect: "none"
+                  userSelect: "none",
+                  WebkitUserSelect: "none"
                 }}
                 draggable={false}
               />
@@ -697,12 +717,12 @@ export default function WildColorBook() {
 
             <div style={styles.centerHelper}>
               {coloringFallback
-                ? `🎨 Fallback image for ${animal.name}. Add /public/images/${animal.id}-coloring.png for custom art.`
+                ? `Fallback image for ${animal.name}.`
                 : tool === "bucket"
-                  ? `🪣 Tap inside shapes to color ${animal.name}`
+                  ? `Bucket: click inside shape to fill ${animal.name}`
                   : tool === "brush"
-                    ? `🖌️ Paint freely inside the lines`
-                    : `🧽 Erase colors (outlines stay intact)`}
+                    ? `Brush: draw inside the outline`
+                    : `Eraser: remove colors only`}
             </div>
           </div>
         </main>
@@ -719,16 +739,16 @@ const styles = {
   appShell: {
     minHeight: "100vh",
     background: "linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%)",
-    padding: 0,
-    fontFamily: "system-ui, -apple-system, sans-serif"
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    overflowX: "hidden"
   },
   topBar: {
     background: "#ffffff",
     borderBottom: "1px solid #e5e7eb",
     position: "sticky",
     top: 0,
-    zIndex: 50,
-    padding: "12px 16px",
+    zIndex: 100,
+    padding: "10px 14px",
     boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
   },
   topRow: {
@@ -764,7 +784,7 @@ const styles = {
     minWidth: 0,
     display: "flex",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
     overflow: "hidden"
   },
   toolGroup: {
@@ -779,7 +799,7 @@ const styles = {
     border: "1px solid #d1d5db",
     background: "#f9fafb",
     color: "#374151",
-    fontWeight: 600,
+    fontWeight: 700,
     cursor: "pointer",
     fontSize: 13,
     whiteSpace: "nowrap"
@@ -788,7 +808,7 @@ const styles = {
     background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     color: "#ffffff",
     border: "1px solid #667eea",
-    boxShadow: "0 4px 12px rgba(102, 126, 234, 0.3)"
+    boxShadow: "0 4px 12px rgba(102, 126, 234, 0.25)"
   },
   paletteScroll: {
     minWidth: 0,
@@ -831,7 +851,7 @@ const styles = {
     border: "1px solid #d1d5db",
     background: "#ffffff",
     color: "#4b5563",
-    fontWeight: 600,
+    fontWeight: 700,
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
@@ -847,7 +867,7 @@ const styles = {
     color: "#ffffff",
     fontWeight: 700,
     cursor: "pointer",
-    boxShadow: "0 4px 14px rgba(102, 126, 234, 0.4)",
+    boxShadow: "0 4px 14px rgba(102, 126, 234, 0.35)",
     whiteSpace: "nowrap",
     fontSize: 14,
     display: "flex",
@@ -858,26 +878,26 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    marginTop: 10,
-    paddingTop: 10,
+    marginTop: 8,
+    paddingTop: 8,
     borderTop: "1px solid #f3f4f6",
     flexWrap: "wrap"
   },
   brushLabel: {
     fontSize: 13,
-    fontWeight: 600,
+    fontWeight: 700,
     color: "#4b5563"
   },
   rangeInput: {
-    width: 140,
+    width: 160,
     accentColor: "#667eea"
   },
   animalsTopSection: {
-    padding: "16px 20px 8px"
+    padding: "14px 16px 8px"
   },
   animalsTopHeader: {
     fontSize: 13,
-    fontWeight: 700,
+    fontWeight: 800,
     color: "#6b7280",
     letterSpacing: 0.3,
     marginBottom: 12,
@@ -886,87 +906,83 @@ const styles = {
   animalsTopScroll: {
     overflowX: "auto",
     overflowY: "hidden",
-    paddingBottom: 8,
+    paddingBottom: 6,
     scrollbarWidth: "thin"
   },
   animalsTopRow: {
     display: "flex",
-    gap: 14,
+    gap: 12,
     flexWrap: "nowrap",
     minWidth: "max-content"
   },
   mainGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(420px, 1fr) 320px",
-    gap: 20,
-    padding: "8px 20px 20px",
+    gridTemplateColumns: "minmax(0, 1fr) 300px",
+    gap: 18,
+    padding: "8px 16px 20px",
     alignItems: "start"
   },
   centerPanel: {
     minWidth: 0
   },
   canvasOuterCard: {
-    borderRadius: 24,
+    borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e5e7eb",
-    padding: 16,
-    boxShadow: "0 4px 20px rgba(0,0,0,0.06)"
+    padding: 14,
+    boxShadow: "0 4px 20px rgba(0,0,0,0.05)"
   },
   canvasInnerBox: {
-    minHeight: 700,
-    borderRadius: 20,
-    background: "#f9fafb",
-    border: "1px solid #e5e7eb",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-    overflow: "hidden"
-  },
-  centerHelper: {
-    marginTop: 14,
-    fontSize: 13,
-    color: "#6b7280",
-    textAlign: "center",
-    fontWeight: 500,
-    lineHeight: 1.4
-  },
-  rightPanel: {
-    minWidth: 0
-  },
-  sideCard: {
-    borderRadius: 24,
-    background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    padding: 20,
-    boxShadow: "0 4px 20px rgba(0,0,0,0.06)"
-  },
-  panelTitle: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: "#1f2937",
-    marginBottom: 16,
-    display: "flex",
-    alignItems: "center",
-    gap: 6
-  },
-  previewBox: {
-    height: 700,
+    minHeight: 620,
     borderRadius: 18,
     background: "#f9fafb",
     border: "1px solid #e5e7eb",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    padding: 12,
+    overflow: "hidden"
+  },
+  centerHelper: {
+    marginTop: 12,
+    fontSize: 13,
+    color: "#6b7280",
+    textAlign: "center",
+    fontWeight: 600,
+    lineHeight: 1.4
+  },
+  rightPanel: {
+    minWidth: 0
+  },
+  sideCard: {
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
     padding: 16,
+    boxShadow: "0 4px 20px rgba(0,0,0,0.05)"
+  },
+  panelTitle: {
+    fontSize: 15,
+    fontWeight: 800,
+    color: "#1f2937",
+    marginBottom: 14
+  },
+  previewBox: {
+    height: 360,
+    borderRadius: 16,
+    background: "#f9fafb",
+    border: "1px solid #e5e7eb",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
     overflow: "hidden"
   },
   helperText: {
-    marginTop: 14,
+    marginTop: 12,
     fontSize: 12,
     color: "#9ca3af",
     textAlign: "center",
-    fontStyle: "italic",
-    lineHeight: 1.5
+    lineHeight: 1.4
   }
 };
