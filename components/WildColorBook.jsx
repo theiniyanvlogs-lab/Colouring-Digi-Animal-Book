@@ -131,9 +131,7 @@ function ReferencePanel({ animal, src, hasFallback }) {
         />
       </div>
       <div style={styles.helperText}>
-        {hasFallback
-          ? "Fallback reference shown."
-          : "Use this as your color guide."}
+        {hasFallback ? "Fallback reference shown." : "Use this as your color guide."}
       </div>
     </div>
   );
@@ -144,6 +142,9 @@ export default function WildColorBook() {
   const fillCanvasRef = useRef(null);
   const baseCanvasRef = useRef(null);
 
+  const undoStackRef = useRef([]);
+  const redoStackRef = useRef([]);
+
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [tool, setTool] = useState("bucket");
@@ -153,15 +154,17 @@ export default function WildColorBook() {
   const [referenceSrc, setReferenceSrc] = useState("");
   const [referenceFallback, setReferenceFallback] = useState(false);
   const [coloringFallback, setColoringFallback] = useState(false);
-  const [undoStack, setUndoStack] = useState([]);
-  const [redoStack, setRedoStack] = useState([]);
+
+  // UI-only counters for enabling buttons reliably
+  const [undoCount, setUndoCount] = useState(0);
+  const [redoCount, setRedoCount] = useState(0);
 
   const isDrawingRef = useRef(false);
   const lastDrawTimeRef = useRef(0);
 
   const animal = ANIMALS[selectedIndex];
   const OUTLINE_THRESHOLD = 160;
-  const MAX_UNDO_STEPS = 10;
+  const MAX_UNDO_STEPS = 15;
 
   const coloringFallbackSrc = useMemo(
     () => createFallbackColoringSvgDataUrl(animal.name, animal.emoji),
@@ -172,6 +175,11 @@ export default function WildColorBook() {
     () => createFallbackReferenceSvgDataUrl(animal.name, animal.emoji),
     [animal.name, animal.emoji]
   );
+
+  const syncHistoryCounts = useCallback(() => {
+    setUndoCount(undoStackRef.current.length);
+    setRedoCount(redoStackRef.current.length);
+  }, []);
 
   const redrawAll = useCallback(() => {
     const displayCanvas = displayCanvasRef.current;
@@ -186,6 +194,12 @@ export default function WildColorBook() {
     displayCtx.drawImage(fillCanvas, 0, 0);
     displayCtx.drawImage(baseCanvas, 0, 0);
   }, []);
+
+  const clearHistory = useCallback(() => {
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    syncHistoryCounts();
+  }, [syncHistoryCounts]);
 
   const loadReferenceImage = useCallback(async () => {
     try {
@@ -238,19 +252,16 @@ export default function WildColorBook() {
     if (baseCtx && fillCtx) {
       baseCtx.clearRect(0, 0, width, height);
       fillCtx.clearRect(0, 0, width, height);
-
       baseCtx.drawImage(img, 0, 0, width, height);
-
       redrawAll();
       setIsReady(true);
     }
   }, [animal.coloring, coloringFallbackSrc, redrawAll]);
 
   const loadAll = useCallback(async () => {
-    setUndoStack([]);
-    setRedoStack([]);
+    clearHistory();
     await Promise.all([loadColoringCanvas(), loadReferenceImage()]);
-  }, [loadColoringCanvas, loadReferenceImage]);
+  }, [clearHistory, loadColoringCanvas, loadReferenceImage]);
 
   useEffect(() => {
     loadAll();
@@ -307,22 +318,29 @@ export default function WildColorBook() {
     };
   }, []);
 
-  const pushUndoSnapshot = useCallback(() => {
+  const captureSnapshot = useCallback(() => {
     const fillCanvas = fillCanvasRef.current;
-    if (!fillCanvas) return;
+    if (!fillCanvas) return null;
 
     const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
-    if (!fillCtx) return;
+    if (!fillCtx) return null;
 
-    const snapshot = fillCtx.getImageData(0, 0, fillCanvas.width, fillCanvas.height);
-
-    setUndoStack((prev) => {
-      const next = [...prev, snapshot];
-      return next.slice(-MAX_UNDO_STEPS);
-    });
-
-    setRedoStack([]);
+    return fillCtx.getImageData(0, 0, fillCanvas.width, fillCanvas.height);
   }, []);
+
+  const pushUndoSnapshot = useCallback(() => {
+    const snapshot = captureSnapshot();
+    if (!snapshot) return;
+
+    undoStackRef.current.push(snapshot);
+
+    if (undoStackRef.current.length > MAX_UNDO_STEPS) {
+      undoStackRef.current.shift();
+    }
+
+    redoStackRef.current = [];
+    syncHistoryCounts();
+  }, [captureSnapshot, syncHistoryCounts]);
 
   const floodFill = useCallback((startX, startY) => {
     const baseCanvas = baseCanvasRef.current;
@@ -346,12 +364,14 @@ export default function WildColorBook() {
 
     const startIndex = (startY * width + startX) * 4;
 
-    if (isOutlinePixel(
-      baseData[startIndex],
-      baseData[startIndex + 1],
-      baseData[startIndex + 2],
-      baseData[startIndex + 3]
-    )) {
+    if (
+      isOutlinePixel(
+        baseData[startIndex],
+        baseData[startIndex + 1],
+        baseData[startIndex + 2],
+        baseData[startIndex + 3]
+      )
+    ) {
       return;
     }
 
@@ -537,49 +557,50 @@ export default function WildColorBook() {
 
   const handleUndo = useCallback(() => {
     const fillCanvas = fillCanvasRef.current;
-    if (!fillCanvas || undoStack.length === 0) return;
+    if (!fillCanvas || undoStackRef.current.length === 0) return;
 
     const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
     if (!fillCtx) return;
 
-    const current = fillCtx.getImageData(0, 0, fillCanvas.width, fillCanvas.height);
-    const previous = undoStack[undoStack.length - 1];
+    const current = captureSnapshot();
+    const previous = undoStackRef.current.pop();
 
-    setUndoStack((prev) => prev.slice(0, -1));
-    setRedoStack((prev) => [...prev, current]);
+    if (!current || !previous) return;
 
+    redoStackRef.current.push(current);
     fillCtx.putImageData(previous, 0, 0);
     redrawAll();
-  }, [redoStack, redrawAll, undoStack]);
+    syncHistoryCounts();
+  }, [captureSnapshot, redrawAll, syncHistoryCounts]);
 
   const handleRedo = useCallback(() => {
     const fillCanvas = fillCanvasRef.current;
-    if (!fillCanvas || redoStack.length === 0) return;
+    if (!fillCanvas || redoStackRef.current.length === 0) return;
 
     const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
     if (!fillCtx) return;
 
-    const current = fillCtx.getImageData(0, 0, fillCanvas.width, fillCanvas.height);
-    const next = redoStack[redoStack.length - 1];
+    const current = captureSnapshot();
+    const next = redoStackRef.current.pop();
 
-    setRedoStack((prev) => prev.slice(0, -1));
-    setUndoStack((prev) => [...prev, current]);
+    if (!current || !next) return;
 
+    undoStackRef.current.push(current);
     fillCtx.putImageData(next, 0, 0);
     redrawAll();
-  }, [redoStack, redrawAll, undoStack]);
+    syncHistoryCounts();
+  }, [captureSnapshot, redrawAll, syncHistoryCounts]);
 
   const handleReset = useCallback(() => {
     if (!window.confirm("Clear all coloring and start over?")) return;
 
-    pushUndoSnapshot();
-
     const fillCanvas = fillCanvasRef.current;
     if (!fillCanvas) return;
 
-    const fillCtx = fillCanvas.getContext("2d");
+    const fillCtx = fillCanvas.getContext("2d", { willReadFrequently: true });
     if (!fillCtx) return;
 
+    pushUndoSnapshot();
     fillCtx.clearRect(0, 0, fillCanvas.width, fillCanvas.height);
     redrawAll();
   }, [pushUndoSnapshot, redrawAll]);
@@ -644,10 +665,43 @@ export default function WildColorBook() {
           </div>
 
           <div style={styles.actionGroup}>
-            <button style={styles.secondaryBtn} onClick={handleUndo} disabled={undoStack.length === 0}>↩</button>
-            <button style={styles.secondaryBtn} onClick={handleRedo} disabled={redoStack.length === 0}>↪</button>
-            <button style={styles.secondaryBtn} onClick={handleReset}>🔄</button>
-            <button style={styles.primaryBtn} onClick={handleSave}>💾 Save</button>
+            <button
+              style={{
+                ...styles.secondaryBtn,
+                opacity: undoCount === 0 ? 0.45 : 1,
+                cursor: undoCount === 0 ? "not-allowed" : "pointer"
+              }}
+              onClick={handleUndo}
+              disabled={undoCount === 0}
+              title="Undo"
+            >
+              ↩
+            </button>
+
+            <button
+              style={{
+                ...styles.secondaryBtn,
+                opacity: redoCount === 0 ? 0.45 : 1,
+                cursor: redoCount === 0 ? "not-allowed" : "pointer"
+              }}
+              onClick={handleRedo}
+              disabled={redoCount === 0}
+              title="Redo"
+            >
+              ↪
+            </button>
+
+            <button
+              style={styles.secondaryBtn}
+              onClick={handleReset}
+              title="Reset"
+            >
+              🔄
+            </button>
+
+            <button style={styles.primaryBtn} onClick={handleSave}>
+              💾 Save
+            </button>
           </div>
         </div>
 
@@ -793,15 +847,15 @@ const styles = {
     flexShrink: 0
   },
   toolBtn: {
-    height: 36,
-    padding: "0 14px",
-    borderRadius: 10,
+    height: 44,
+    padding: "0 18px",
+    borderRadius: 12,
     border: "1px solid #d1d5db",
     background: "#f9fafb",
     color: "#374151",
     fontWeight: 700,
     cursor: "pointer",
-    fontSize: 13,
+    fontSize: 14,
     whiteSpace: "nowrap"
   },
   toolBtnActive: {
@@ -821,16 +875,16 @@ const styles = {
   paletteWrap: {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     flexWrap: "nowrap",
     minWidth: "max-content",
     paddingLeft: 4
   },
   colorDot: {
-    width: 20,
-    height: 20,
-    minWidth: 20,
-    minHeight: 20,
+    width: 24,
+    height: 24,
+    minWidth: 24,
+    minHeight: 24,
     borderRadius: "50%",
     cursor: "pointer",
     padding: 0,
@@ -845,9 +899,9 @@ const styles = {
     flexShrink: 0
   },
   secondaryBtn: {
-    height: 36,
-    width: 36,
-    borderRadius: 10,
+    height: 44,
+    width: 44,
+    borderRadius: 12,
     border: "1px solid #d1d5db",
     background: "#ffffff",
     color: "#4b5563",
@@ -856,12 +910,12 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 14
+    fontSize: 18
   },
   primaryBtn: {
-    height: 36,
-    padding: "0 16px",
-    borderRadius: 10,
+    height: 44,
+    padding: "0 18px",
+    borderRadius: 12,
     border: "none",
     background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     color: "#ffffff",
